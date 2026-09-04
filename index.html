@@ -198,6 +198,14 @@
 
       <!-- TAB 3: Report & Grafici -->
       <div id="tab-report" class="tab-content">
+        <!-- Filtro Unico per i Report -->
+        <div class="filter-container">
+          <label for="report-month-filter">📅 Filtra Grafici:</label>
+          <select id="report-month-filter" onchange="renderCharts()">
+            <option value="all">Tutti i periodi</option>
+          </select>
+        </div>
+
         <div class="chart-card">
           <h3>📈 Andamento Mensile (Entrate vs Uscite)</h3>
           <div class="chart-container">
@@ -257,10 +265,19 @@
     const formEl = document.getElementById('tx-form');
     const dateInput = document.getElementById('data');
     const filterSelect = document.getElementById('month-filter');
+    const reportFilterSelect = document.getElementById('report-month-filter');
     const entitaDatalist = document.getElementById('entita-list');
 
     const nomiMesi = ['Gennaio', 'Febbraio', 'Marzo', 'Aprile', 'Maggio', 'Giugno', 'Luglio', 'Agosto', 'Settembre', 'Ottobre', 'Novembre', 'Dicembre'];
     dateInput.valueAsDate = new Date();
+
+    // Helper per ottenere l'anno/mese corrente nel formato YYYY-MM
+    function getCurrentYearMonth() {
+      const now = new Date();
+      const year = now.getFullYear();
+      const month = String(now.getMonth() + 1).padStart(2, '0');
+      return `${year}-${month}`;
+    }
 
     // Gestione Cambio Tab
     function switchTab(tabId) {
@@ -377,8 +394,11 @@
     }
 
     function populateMonthFilter() {
-      const currentSelection = filterSelect.value;
+      const currentSelectionStorico = filterSelect.value;
+      const currentSelectionReport = reportFilterSelect.value;
+
       filterSelect.innerHTML = '<option value="all">Tutti i movimenti</option>';
+      reportFilterSelect.innerHTML = '<option value="all">Tutti i periodi</option>';
 
       const periodiSet = new Set();
       transazioni.forEach(t => {
@@ -390,14 +410,30 @@
 
       Array.from(periodiSet).sort().reverse().forEach(periodo => {
         const [year, month] = periodo.split('-');
-        const option = document.createElement('option');
-        option.value = periodo;
-        option.textContent = `${nomiMesi[parseInt(month, 10) - 1]} ${year}`;
-        filterSelect.appendChild(option);
+        const optionText = `${nomiMesi[parseInt(month, 10) - 1]} ${year}`;
+        
+        const optStorico = document.createElement('option');
+        optStorico.value = periodo;
+        optStorico.textContent = optionText;
+        filterSelect.appendChild(optStorico);
+
+        const optReport = document.createElement('option');
+        optReport.value = periodo;
+        optReport.textContent = optionText;
+        reportFilterSelect.appendChild(optReport);
       });
 
-      if (Array.from(filterSelect.options).some(opt => opt.value === currentSelection)) {
-        filterSelect.value = currentSelection;
+      // Mantiene la selezione per lo storico se già valida
+      if (Array.from(filterSelect.options).some(opt => opt.value === currentSelectionStorico)) {
+        filterSelect.value = currentSelectionStorico;
+      }
+
+      // Imposta di DEFAULT il Mese/Anno corrente nei Report
+      const currentYM = getCurrentYearMonth();
+      if (currentSelectionReport && Array.from(reportFilterSelect.options).some(opt => opt.value === currentSelectionReport)) {
+        reportFilterSelect.value = currentSelectionReport;
+      } else if (Array.from(reportFilterSelect.options).some(opt => opt.value === currentYM)) {
+        reportFilterSelect.value = currentYM;
       }
     }
 
@@ -462,13 +498,30 @@
     function renderCharts() {
       if (!transazioni || transazioni.length === 0) return;
 
+      let selectedPeriod = reportFilterSelect.value;
+
+      // Se non è ancora selezionato un valore valido, assegna il mese corrente
+      if (!selectedPeriod || selectedPeriod === '') {
+        const currentYM = getCurrentYearMonth();
+        if (Array.from(reportFilterSelect.options).some(opt => opt.value === currentYM)) {
+          reportFilterSelect.value = currentYM;
+          selectedPeriod = currentYM;
+        } else {
+          selectedPeriod = 'all';
+        }
+      }
+
+      const txReport = selectedPeriod === 'all' 
+        ? transazioni 
+        : transazioni.filter(t => t.data && t.data.startsWith(selectedPeriod));
+
       if (chartMonthly) chartMonthly.destroy();
       if (chartCategory) chartCategory.destroy();
       if (chartSupplier) chartSupplier.destroy();
 
       // 1. Grafico Mensile: Entrate vs Uscite
       const mensili = {};
-      transazioni.forEach(t => {
+      txReport.forEach(t => {
         if (!t.data) return;
         const key = t.data.substring(0, 7);
         if (!mensili[key]) mensili[key] = { entrate: 0, uscite: 0 };
@@ -504,7 +557,7 @@
 
       // 2. Grafico Categorie Spese (Doughnut)
       const categorieSpesa = {};
-      transazioni.filter(t => t.tipo === 'uscita').forEach(t => {
+      txReport.filter(t => t.tipo === 'uscita').forEach(t => {
         const cat = t.category || t.categoria || 'Altro';
         categorieSpesa[cat] = (categorieSpesa[cat] || 0) + parseFloat(t.importo);
       });
@@ -523,12 +576,11 @@
 
       // 3. Totale Spese per Fornitore (Ordinato dal più grande al più piccolo)
       const speseFornitore = {};
-      transazioni.filter(t => t.tipo === 'uscita').forEach(t => {
+      txReport.filter(t => t.tipo === 'uscita').forEach(t => {
         const fornitore = (t.entita && t.entita.trim() !== '') ? t.entita.trim() : 'Non Specificato';
         speseFornitore[fornitore] = (speseFornitore[fornitore] || 0) + parseFloat(t.importo);
       });
 
-      // Ordinamento decrescente
       const fornitoriSorted = Object.entries(speseFornitore)
         .sort((a, b) => b[1] - a[1]);
 
