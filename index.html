@@ -328,21 +328,22 @@
       if (error) alert('Errore di accesso: ' + error.message);
     }
 
-    async function resetPassword() {
-      const email = document.getElementById('reset-email').value.trim();
-      if (!email) return alert('Inserisci l\'indirizzo email');
-      
-      const { error } = await supabaseClient.auth.resetPasswordForEmail(email, {
-        redirectTo: window.location.origin
-      });
+async function resetPassword() {
+  const email = document.getElementById('reset-email').value.trim();
+  if (!email) return alert('Inserisci l\'indirizzo email');
+  
+  const { error } = await supabaseClient.auth.resetPasswordForEmail(email, {
+    redirectTo: 'https://gestione-spese-beta.vercel.app'
+  });
 
-      if (error) {
-        alert('Errore: ' + error.message);
-      } else {
-        alert('Email di ripristino inviata! Controlla la tua casella di posta.');
-        showLoginView();
-      }
-    }
+  if (error) {
+    alert('Errore: ' + error.message);
+  } else {
+    alert('Email di ripristino inviata! Controlla la tua casella di posta.');
+    showLoginView();
+  }
+}
+
 
     async function logout() {
       await supabaseClient.auth.signOut();
