@@ -21,6 +21,11 @@
 
     h1 { text-align: center; margin-bottom: 20px; font-size: 1.5rem; color: #111; }
 
+    /* Filtro Mese/Anno */
+    .filter-container { margin-bottom: 15px; display: flex; justify-content: space-between; align-items: center; background: var(--card-bg); padding: 10px 15px; border-radius: 10px; box-shadow: 0 2px 5px rgba(0,0,0,0.05); }
+    .filter-container label { font-size: 0.85rem; font-weight: bold; color: #555; }
+    .filter-container select { width: auto; padding: 6px 12px; font-weight: 600; }
+
     /* Dashboard Bilancio */
     .dashboard { display: flex; gap: 10px; margin-bottom: 20px; }
     .card { flex: 1; background: var(--card-bg); padding: 15px; border-radius: 10px; box-shadow: 0 2px 5px rgba(0,0,0,0.05); text-align: center; }
@@ -54,13 +59,21 @@
     .delete-btn:hover { color: var(--expense); }
     .empty-msg { text-align: center; color: #999; font-size: 0.9rem; padding: 10px 0; }
   </style>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 </head>
 <body>
 
   <div class="container">
     <h1>Gestione Spese</h1>
 
-    <!-- Dashboard -->
+    <!-- Filtro Periodo -->
+    <div class="filter-container">
+      <label for="month-filter">📅 Periodo:</label>
+      <select id="month-filter" onchange="applyFilter()">
+        <option value="all">Tutti i movimenti</option>
+      </select>
+    </div>
+
     <div class="dashboard">
       <div class="card">
         <h3>Saldo</h3>
@@ -76,21 +89,20 @@
       </div>
     </div>
 
-    <!-- Form Aggiungi Transazione -->
     <form id="tx-form">
-      <input type="text" id="description" placeholder="Descrizione (es. Spesa, Stipendio)" required>
+      <input type="text" id="descrizione" placeholder="Descrizione (es. Spesa, Stipendio)" required>
       
       <div class="form-group">
-        <input type="number" id="amount" placeholder="Importo (€)" step="0.01" min="0.01" required>
-        <input type="date" id="date" required>
+        <input type="number" id="importo" placeholder="Importo (€)" step="0.01" min="0.01" required>
+        <input type="date" id="data" required>
       </div>
 
       <div class="form-group">
-        <select id="type">
-          <option value="expense">Uscita</option>
-          <option value="income">Entrata</option>
+        <select id="tipo">
+          <option value="uscita">Uscita</option>
+          <option value="entrata">Entrata</option>
         </select>
-        <select id="category">
+        <select id="categoria">
           <option value="Cibo">Cibo & Spesa</option>
           <option value="Trasporti">Trasporti & Auto</option>
           <option value="Casa">Casa & Bollette</option>
@@ -103,7 +115,6 @@
       <button type="submit">Aggiungi Movimento</button>
     </form>
 
-    <!-- Lista Movimenti -->
     <div class="transactions">
       <h2>Storico Movimenti</h2>
       <ul id="tx-list"></ul>
@@ -111,39 +122,103 @@
   </div>
 
   <script>
-    // Stato dell'applicazione
-    let transactions = JSON.parse(localStorage.getItem('transactions')) || [];
+    const SUPABASE_URL = 'https://owqspxfgueqzivrwvupp.supabase.co/rest/v1/';
+    const SUPABASE_ANON_KEY = 'sb_publishable_HEp-x3FM0m_Ym8h7O1etFw_0ZojwUk7';
 
-    // Elementi DOM
+    const supabase = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+    let transazioni = [];
+    let transazioniFiltrate = [];
+
     const balanceEl = document.getElementById('total-balance');
     const incomeEl = document.getElementById('total-income');
     const expenseEl = document.getElementById('total-expense');
     const listEl = document.getElementById('tx-list');
     const formEl = document.getElementById('tx-form');
-    const dateInput = document.getElementById('date');
+    const dateInput = document.getElementById('data');
+    const filterSelect = document.getElementById('month-filter');
 
-    // Imposta la data odierna come default nell'input date
+    const nomiMesi = [
+      'Gennaio', 'Febbraio', 'Marzo', 'Aprile', 'Maggio', 'Giugno',
+      'Luglio', 'Agosto', 'Settembre', 'Ottobre', 'Novembre', 'Dicembre'
+    ];
+
     dateInput.valueAsDate = new Date();
 
-    // Salva i dati nel localStorage
-    function updateLocalStorage() {
-      localStorage.setItem('transactions', JSON.stringify(transactions));
+    async function fetchTransazioni() {
+      const { data, error } = await supabase
+        .from('transazioni')
+        .select('*')
+        .order('data', { ascending: false });
+
+      if (error) {
+        console.error('Errore durante il recupero dei dati:', error);
+        return;
+      }
+
+      transazioni = data;
+      populateMonthFilter();
+      applyFilter();
     }
 
-    // Calcola il bilancio complessivo
+    // Genera dinamicamente le opzioni del filtro Mese/Anno
+    function populateMonthFilter() {
+      const currentSelection = filterSelect.value;
+      filterSelect.innerHTML = '<option value="all">Tutti i movimenti</option>';
+
+      const periodiSet = new Set();
+      transazioni.forEach(t => {
+        if (t.data) {
+          const [year, month] = t.data.split('-');
+          periodiSet.add(`${year}-${month}`);
+        }
+      });
+
+      const periodiOrdinati = Array.from(periodiSet).sort().reverse();
+
+      periodiOrdinati.forEach(periodo => {
+        const [year, month] = periodo.split('-');
+        const option = document.createElement('option');
+        option.value = periodo;
+        option.textContent = `${nomiMesi[parseInt(month, 10) - 1]} ${year}`;
+        filterSelect.appendChild(option);
+      });
+
+      if (Array.from(filterSelect.options).some(opt => opt.value === currentSelection)) {
+        filterSelect.value = currentSelection;
+      } else {
+        // Seleziona di default il mese corrente se presente, altrimenti il primo disponibile
+        const now = new Date();
+        const currentPeriod = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+        if (periodiSet.has(currentPeriod)) {
+          filterSelect.value = currentPeriod;
+        }
+      }
+    }
+
+    function applyFilter() {
+      const selected = filterSelect.value;
+      if (selected === 'all') {
+        transazioniFiltrate = [...transazioni];
+      } else {
+        transazioniFiltrate = transazioni.filter(t => t.data && t.data.startsWith(selected));
+      }
+      renderUI();
+    }
+
     function updateValues() {
-      const total = transactions
-        .reduce((acc, t) => acc + (t.type === 'income' ? t.amount : -t.amount), 0)
+      const total = transazioniFiltrate
+        .reduce((acc, t) => acc + (t.tipo === 'entrata' ? parseFloat(t.importo) : -parseFloat(t.importo)), 0)
         .toFixed(2);
       
-      const income = transactions
-        .filter(t => t.type === 'income')
-        .reduce((acc, t) => acc + t.amount, 0)
+      const income = transazioniFiltrate
+        .filter(t => t.tipo === 'entrata')
+        .reduce((acc, t) => acc + parseFloat(t.importo), 0)
         .toFixed(2);
 
-      const expense = transactions
-        .filter(t => t.type === 'expense')
-        .reduce((acc, t) => acc + t.amount, 0)
+      const expense = transazioniFiltrate
+        .filter(t => t.tipo === 'uscita')
+        .reduce((acc, t) => acc + parseFloat(t.importo), 0)
         .toFixed(2);
 
       balanceEl.innerText = `€${total}`;
@@ -151,89 +226,93 @@
       expenseEl.innerText = `-€${expense}`;
     }
 
-    // Formatta la data YYYY-MM-DD in formato italiano DD/MM/YYYY
     function formatDate(dateString) {
       if (!dateString) return '';
       const [year, month, day] = dateString.split('-');
       return `${day}/${month}/${year}`;
     }
 
-    // Aggiunge una transazione alla lista nell'interfaccia
-    function addTransactionDOM(transaction) {
-      const isIncome = transaction.type === 'income';
+    function addTransactionDOM(t) {
+      const isIncome = t.tipo === 'entrata';
       const sign = isIncome ? '+' : '-';
       const itemClass = isIncome ? 'plus' : 'minus';
 
       const li = document.createElement('li');
       li.innerHTML = `
         <div class="tx-info">
-          <span class="tx-title">${transaction.description}</span>
+          <span class="tx-title">${t.descrizione}</span>
           <div class="tx-details">
-            <span>📅 ${formatDate(transaction.date)}</span>
-            <span>• ${transaction.category}</span>
+            <span>📅 ${formatDate(t.data)}</span>
+            <span>• ${t.categoria}</span>
           </div>
         </div>
         <div class="tx-amount ${itemClass}">
-          ${sign}€${transaction.amount.toFixed(2)}
-          <button class="delete-btn" onclick="removeTransaction('${transaction.id}')">&times;</button>
+          ${sign}€${parseFloat(t.importo).toFixed(2)}
+          <button class="delete-btn" onclick="removeTransaction('${t.id}')">&times;</button>
         </div>
       `;
 
       listEl.appendChild(li);
     }
 
-    // Rende l'interfaccia sincronizzata con i dati (ordinati per data decrescente)
-    function init() {
+    function renderUI() {
       listEl.innerHTML = '';
-      if (transactions.length === 0) {
-        listEl.innerHTML = '<p class="empty-msg">Nessuna transazione registrata.</p>';
+      if (transazioniFiltrate.length === 0) {
+        listEl.innerHTML = '<p class="empty-msg">Nessuna transazione per il periodo selezionato.</p>';
       } else {
-        // Ordina i movimenti dal più recente al più vecchio
-        const sortedTransactions = [...transactions].sort((a, b) => new Date(b.date) - new Date(a.date));
-        sortedTransactions.forEach(addTransactionDOM);
+        transazioniFiltrate.forEach(addTransactionDOM);
       }
       updateValues();
     }
 
-    // Gestione Invio Form
-    formEl.addEventListener('submit', (e) => {
+    formEl.addEventListener('submit', async (e) => {
       e.preventDefault();
 
-      const description = document.getElementById('description').value.trim();
-      const amount = parseFloat(document.getElementById('amount').value);
-      const date = dateInput.value;
-      const type = document.getElementById('type').value;
-      const category = document.getElementById('category').value;
+      const descrizione = document.getElementById('descrizione').value.trim();
+      const importo = parseFloat(document.getElementById('importo').value);
+      const dataVal = dateInput.value;
+      const tipo = document.getElementById('tipo').value;
+      const categoria = document.getElementById('categoria').value;
 
-      if (!description || isNaN(amount) || !date) return;
+      if (!descrizione || isNaN(importo) || !dataVal) return;
 
-      const newTx = {
-        id: Date.now().toString(),
-        description,
-        amount,
-        date,
-        type,
-        category
-      };
+      const nuovaTx = { descrizione, importo, data: dataVal, tipo, categoria };
 
-      transactions.push(newTx);
-      updateLocalStorage();
-      init();
+      const { data, error } = await supabase
+        .from('transazioni')
+        .insert([nuovaTx])
+        .select();
 
-      // Reset Form ma mantieni la data corrente
+      if (error) {
+        alert('Errore nel salvataggio: ' + error.message);
+        return;
+      }
+
+      transazioni.unshift(data[0]);
+      populateMonthFilter();
+      applyFilter();
+
       formEl.reset();
       dateInput.valueAsDate = new Date();
     });
 
-    // Rimuove una transazione tramite ID
-    window.removeTransaction = function(id) {
-      transactions = transactions.filter(t => t.id !== id);
-      updateLocalStorage();
-      init();
+    window.removeTransaction = async function(id) {
+      const { error } = await supabase
+        .from('transazioni')
+        .delete()
+        .eq('id', id);
+
+      if (error) {
+        alert('Errore durante l\'eliminazione: ' + error.message);
+        return;
+      }
+
+      transazioni = transazioni.filter(t => t.id !== id);
+      populateMonthFilter();
+      applyFilter();
     };
 
-    // Inizializzazione
-    init();
+    fetchTransazioni();
   </script>
 </body>
 </html>
