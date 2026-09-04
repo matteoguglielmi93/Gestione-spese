@@ -17,7 +17,7 @@
 
     * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
     body { background-color: var(--bg); color: var(--text); padding: 20px; display: flex; justify-content: center; }
-    .container { width: 100%; max-width: 500px; }
+    .container { width: 100%; max-width: 550px; }
 
     /* Auth Screen */
     .auth-card { background: var(--card-bg); padding: 25px; border-radius: 10px; box-shadow: 0 2px 5px rgba(0,0,0,0.05); text-align: center; }
@@ -41,7 +41,7 @@
 
     /* Navigation Tabs */
     .tab-nav { display: flex; gap: 5px; margin-bottom: 20px; border-bottom: 2px solid var(--border); }
-    .tab-btn { flex: 1; padding: 10px; background: none; border: none; border-bottom: 3px solid transparent; font-weight: bold; color: #777; cursor: pointer; transition: all 0.2s; border-radius: 6px 6px 0 0; }
+    .tab-btn { flex: 1; padding: 10px 5px; background: none; border: none; border-bottom: 3px solid transparent; font-weight: bold; font-size: 0.85rem; color: #777; cursor: pointer; transition: all 0.2s; border-radius: 6px 6px 0 0; text-align: center; }
     .tab-btn:hover { background: rgba(0,0,0,0.03); color: var(--text); }
     .tab-btn.active { color: var(--primary); border-bottom-color: var(--primary); background: var(--card-bg); }
 
@@ -77,8 +77,17 @@
     .delete-btn:hover { color: var(--expense); }
     .empty-msg { text-align: center; color: #999; font-size: 0.9rem; padding: 15px 0; }
     .hidden { display: none !important; }
+
+    /* Charts Layout */
+    .chart-card { background: var(--card-bg); border-radius: 10px; padding: 15px; box-shadow: 0 2px 5px rgba(0,0,0,0.05); margin-bottom: 15px; }
+    .chart-card h3 { font-size: 0.9rem; color: #555; margin-bottom: 12px; text-align: center; }
+    .chart-container { position: relative; width: 100%; min-height: 220px; }
+    .chart-container-tall { position: relative; width: 100%; min-height: 320px; }
   </style>
+
+  <!-- Supabase & Chart.js CDN -->
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
 <body>
 
@@ -104,8 +113,9 @@
 
       <!-- Tab Navigation -->
       <div class="tab-nav">
-        <button class="tab-btn active" onclick="switchTab('tab-inserimento')">➕ Nuovo Movimento</button>
-        <button class="tab-btn" onclick="switchTab('tab-storico')">📋 Storico Movimenti</button>
+        <button class="tab-btn active" onclick="switchTab('tab-inserimento')">➕ Nuovo</button>
+        <button class="tab-btn" onclick="switchTab('tab-storico')">📋 Storico</button>
+        <button class="tab-btn" onclick="switchTab('tab-report')">📊 Report</button>
       </div>
 
       <!-- TAB 1: Inserimento Nuovo Movimento -->
@@ -186,6 +196,30 @@
         </div>
       </div>
 
+      <!-- TAB 3: Report & Grafici -->
+      <div id="tab-report" class="tab-content">
+        <div class="chart-card">
+          <h3>📈 Andamento Mensile (Entrate vs Uscite)</h3>
+          <div class="chart-container">
+            <canvas id="monthlyChart"></canvas>
+          </div>
+        </div>
+
+        <div class="chart-card">
+          <h3>🍕 Ripartizione Spese per Categoria</h3>
+          <div class="chart-container">
+            <canvas id="categoryChart"></canvas>
+          </div>
+        </div>
+
+        <div class="chart-card">
+          <h3>🏢 Totale Spese per Fornitore (Decrescente)</h3>
+          <div class="chart-container-tall">
+            <canvas id="supplierChart"></canvas>
+          </div>
+        </div>
+      </div>
+
     </div>
 
   </div>
@@ -199,6 +233,11 @@
     let currentUser = null;
     let transazioni = [];
     let transazioniFiltrate = [];
+
+    // Riferimenti Istanze Grafici
+    let chartMonthly = null;
+    let chartCategory = null;
+    let chartSupplier = null;
 
     const authSection = document.getElementById('auth-section');
     const appSection = document.getElementById('app-section');
@@ -223,18 +262,26 @@
     const nomiMesi = ['Gennaio', 'Febbraio', 'Marzo', 'Aprile', 'Maggio', 'Giugno', 'Luglio', 'Agosto', 'Settembre', 'Ottobre', 'Novembre', 'Dicembre'];
     dateInput.valueAsDate = new Date();
 
-    // Gestione del cambio Tab
+    // Gestione Cambio Tab
     function switchTab(tabId) {
       document.querySelectorAll('.tab-content').forEach(tab => tab.classList.remove('active'));
       document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
 
       document.getElementById(tabId).classList.add('active');
-      
-      const activeBtnIndex = tabId === 'tab-inserimento' ? 0 : 1;
-      document.querySelectorAll('.tab-btn')[activeBtnIndex].classList.add('active');
+
+      const tabs = ['tab-inserimento', 'tab-storico', 'tab-report'];
+      const activeIdx = tabs.indexOf(tabId);
+      if (activeIdx !== -1) {
+        document.querySelectorAll('.tab-btn')[activeIdx].classList.add('active');
+      }
+
+      // Se selezionata la tab report, rigeneriamo i grafici
+      if (tabId === 'tab-report') {
+        renderCharts();
+      }
     }
 
-    // Monitoraggio dello stato di autenticazione
+    // Monitoraggio Autenticazione
     supabaseClient.auth.onAuthStateChange((event, session) => {
       if (session) {
         currentUser = session.user;
@@ -257,7 +304,7 @@
       }
       const { error } = await supabaseClient.auth.signUp({ email, password });
       if (error) alert(error.message);
-      else alert('Registrazione effettuata! Se la conferma via e-mail è attiva nel tuo progetto Supabase, controlla la tua casella di posta per confermare.');
+      else alert('Registrazione effettuata! Controlla la tua email se attiva la conferma.');
     }
 
     async function login() {
@@ -293,7 +340,6 @@
       updateCurrentMonthDashboard();
     }
 
-    // Calcola e aggiorna i totali del mese corrente nella tab Inserimento
     function updateCurrentMonthDashboard() {
       const now = new Date();
       const currentYear = now.getFullYear();
@@ -408,6 +454,111 @@
         });
       }
       updateHistoryValues();
+    }
+
+    /* ----------------------------------------------------
+       FUNZIONI PER LA GENERAZIONE DEI GRAFICI (CHART.JS)
+    ---------------------------------------------------- */
+    function renderCharts() {
+      if (!transazioni || transazioni.length === 0) return;
+
+      if (chartMonthly) chartMonthly.destroy();
+      if (chartCategory) chartCategory.destroy();
+      if (chartSupplier) chartSupplier.destroy();
+
+      // 1. Grafico Mensile: Entrate vs Uscite
+      const mensili = {};
+      transazioni.forEach(t => {
+        if (!t.data) return;
+        const key = t.data.substring(0, 7);
+        if (!mensili[key]) mensili[key] = { entrate: 0, uscite: 0 };
+        if (t.tipo === 'entrata') mensili[key].entrate += parseFloat(t.importo);
+        else mensili[key].uscite += parseFloat(t.importo);
+      });
+
+      const mesiSorted = Object.keys(mensili).sort();
+      const labelsMesi = mesiSorted.map(m => {
+        const [y, mo] = m.split('-');
+        return `${nomiMesi[parseInt(mo, 10) - 1]} ${y.substring(2)}`;
+      });
+
+      chartMonthly = new Chart(document.getElementById('monthlyChart'), {
+        type: 'bar',
+        data: {
+          labels: labelsMesi,
+          datasets: [
+            {
+              label: 'Entrate (€)',
+              data: mesiSorted.map(m => mensili[m].entrate),
+              backgroundColor: '#2ecc71'
+            },
+            {
+              label: 'Uscite (€)',
+              data: mesiSorted.map(m => mensili[m].uscite),
+              backgroundColor: '#e74c3c'
+            }
+          ]
+        },
+        options: { responsive: true, maintainAspectRatio: false }
+      });
+
+      // 2. Grafico Categorie Spese (Doughnut)
+      const categorieSpesa = {};
+      transazioni.filter(t => t.tipo === 'uscita').forEach(t => {
+        const cat = t.category || t.categoria || 'Altro';
+        categorieSpesa[cat] = (categorieSpesa[cat] || 0) + parseFloat(t.importo);
+      });
+
+      chartCategory = new Chart(document.getElementById('categoryChart'), {
+        type: 'doughnut',
+        data: {
+          labels: Object.keys(categorieSpesa),
+          datasets: [{
+            data: Object.values(categorieSpesa),
+            backgroundColor: ['#4a90e2', '#e67e22', '#f1c40f', '#9b59b6', '#1abc9c', '#e74c3c']
+          }]
+        },
+        options: { responsive: true, maintainAspectRatio: false }
+      });
+
+      // 3. Totale Spese per Fornitore (Ordinato dal più grande al più piccolo)
+      const speseFornitore = {};
+      transazioni.filter(t => t.tipo === 'uscita').forEach(t => {
+        const fornitore = (t.entita && t.entita.trim() !== '') ? t.entita.trim() : 'Non Specificato';
+        speseFornitore[fornitore] = (speseFornitore[fornitore] || 0) + parseFloat(t.importo);
+      });
+
+      // Ordinamento decrescente
+      const fornitoriSorted = Object.entries(speseFornitore)
+        .sort((a, b) => b[1] - a[1]);
+
+      chartSupplier = new Chart(document.getElementById('supplierChart'), {
+        type: 'bar',
+        data: {
+          labels: fornitoriSorted.map(item => item[0]),
+          datasets: [{
+            label: 'Totale Speso (€)',
+            data: fornitoriSorted.map(item => item[1]),
+            backgroundColor: '#3498db'
+          }]
+        },
+        options: {
+          indexAxis: 'y',
+          responsive: true,
+          maintainAspectRatio: false,
+          scales: {
+            x: {
+              beginAtZero: true,
+              ticks: {
+                stepSize: 50,
+                callback: function(value) {
+                  return '€' + value;
+                }
+              }
+            }
+          }
+        }
+      });
     }
 
     formEl.addEventListener('submit', async (e) => {
