@@ -142,11 +142,10 @@
   </div>
 
   <script>
-    // SOSTITUISCI CON I TUOI DATI DI SUPABASE
-    const SUPABASE_URL = 'https://owqspxfgueqzivrwvupp.supabase.co/rest/v1/';
+    const SUPABASE_URL = 'https://owqspxfgueqzivrwvupp.supabase.co';
     const SUPABASE_ANON_KEY = 'sb_publishable_HEp-x3FM0m_Ym8h7O1etFw_0ZojwUk7';
 
-    const supabase = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+    const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
     let currentUser = null;
     let transazioni = [];
@@ -166,7 +165,7 @@
     dateInput.valueAsDate = new Date();
 
     // Monitoraggio dello stato di autenticazione dell'utente
-    supabase.auth.onAuthStateChange((event, session) => {
+    supabaseClient.auth.onAuthStateChange((event, session) => {
       if (session) {
         currentUser = session.user;
         authSection.classList.add('hidden');
@@ -182,7 +181,11 @@
     async function signUp() {
       const email = document.getElementById('auth-email').value;
       const password = document.getElementById('auth-password').value;
-      const { error } = await supabase.auth.signUp({ email, password });
+      if (!email || !password) {
+        alert('Inserisci email e password');
+        return;
+      }
+      const { error } = await supabaseClient.auth.signUp({ email, password });
       if (error) alert(error.message);
       else alert('Registrazione effettuata! Se la conferma via e-mail è attiva nel tuo progetto Supabase, controlla la tua casella di posta per confermare.');
     }
@@ -190,16 +193,20 @@
     async function login() {
       const email = document.getElementById('auth-email').value;
       const password = document.getElementById('auth-password').value;
-      const { error } = await supabase.auth.signInWithPassword({ email, password });
+      if (!email || !password) {
+        alert('Inserisci email e password');
+        return;
+      }
+      const { error } = await supabaseClient.auth.signInWithPassword({ email, password });
       if (error) alert('Errore di accesso: ' + error.message);
     }
 
     async function logout() {
-      await supabase.auth.signOut();
+      await supabaseClient.auth.signOut();
     }
 
     async function fetchTransazioni() {
-      const { data, error } = await supabase
+      const { data, error } = await supabaseClient
         .from('transactions')
         .select('*')
         .order('data', { ascending: false });
@@ -309,7 +316,7 @@
         user_id: currentUser.id 
       };
 
-      const { data, error } = await supabase
+      const { data, error } = await supabaseClient
         .from('transactions')
         .insert([nuovaTx])
         .select();
@@ -327,7 +334,7 @@
     });
 
     window.removeTransaction = async function(id) {
-      const { error } = await supabase
+      const { error } = await supabaseClient
         .from('transactions')
         .delete()
         .eq('id', id);
