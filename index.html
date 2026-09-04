@@ -25,35 +25,49 @@
     .auth-card input { margin-bottom: 10px; }
     .auth-card .btn-group { display: flex; gap: 10px; margin-top: 10px; }
 
-    /* App Screen */
-    .header-bar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
+    /* Header Bar */
+    .header-bar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; }
     .logout-btn { background: #999; font-size: 0.8rem; padding: 5px 10px; }
 
-    .filter-container { margin-bottom: 15px; display: flex; justify-content: space-between; align-items: center; background: var(--card-bg); padding: 10px 15px; border-radius: 10px; box-shadow: 0 2px 5px rgba(0,0,0,0.05); }
-    .filter-container label { font-size: 0.85rem; font-weight: bold; color: #555; }
-    .filter-container select { width: auto; padding: 6px 12px; font-weight: 600; }
-
+    /* Dashboard Totali */
+    .dashboard-title { font-size: 0.85rem; font-weight: bold; color: #666; margin-bottom: 8px; text-transform: uppercase; letter-spacing: 0.5px; }
     .dashboard { display: flex; gap: 10px; margin-bottom: 20px; }
-    .card { flex: 1; background: var(--card-bg); padding: 15px; border-radius: 10px; box-shadow: 0 2px 5px rgba(0,0,0,0.05); text-align: center; }
-    .card h3 { font-size: 0.8rem; color: #666; text-transform: uppercase; margin-bottom: 5px; }
-    .card p { font-size: 1.2rem; font-weight: bold; }
+    .card { flex: 1; background: var(--card-bg); padding: 12px 10px; border-radius: 10px; box-shadow: 0 2px 5px rgba(0,0,0,0.05); text-align: center; }
+    .card h3 { font-size: 0.75rem; color: #666; text-transform: uppercase; margin-bottom: 5px; }
+    .card p { font-size: 1.1rem; font-weight: bold; }
     .balance { color: var(--primary); }
     .income-val { color: var(--income); }
     .expense-val { color: var(--expense); }
 
-    form { background: var(--card-bg); padding: 15px; border-radius: 10px; box-shadow: 0 2px 5px rgba(0,0,0,0.05); margin-bottom: 20px; display: flex; flex-direction: column; gap: 10px; }
+    /* Navigation Tabs */
+    .tab-nav { display: flex; gap: 5px; margin-bottom: 20px; border-bottom: 2px solid var(--border); }
+    .tab-btn { flex: 1; padding: 10px; background: none; border: none; border-bottom: 3px solid transparent; font-weight: bold; color: #777; cursor: pointer; transition: all 0.2s; border-radius: 6px 6px 0 0; }
+    .tab-btn:hover { background: rgba(0,0,0,0.03); color: var(--text); }
+    .tab-btn.active { color: var(--primary); border-bottom-color: var(--primary); background: var(--card-bg); }
+
+    /* Tab Contents */
+    .tab-content { display: none; }
+    .tab-content.active { display: block; }
+
+    /* Filter */
+    .filter-container { margin-bottom: 15px; display: flex; justify-content: space-between; align-items: center; background: var(--card-bg); padding: 10px 15px; border-radius: 10px; box-shadow: 0 2px 5px rgba(0,0,0,0.05); }
+    .filter-container label { font-size: 0.85rem; font-weight: bold; color: #555; }
+    .filter-container select { width: auto; padding: 6px 12px; font-weight: 600; }
+
+    /* Form & Controls */
+    form { background: var(--card-bg); padding: 20px; border-radius: 10px; box-shadow: 0 2px 5px rgba(0,0,0,0.05); display: flex; flex-direction: column; gap: 12px; }
     .form-group { display: flex; gap: 10px; }
     input, select, button { padding: 10px; border: 1px solid var(--border); border-radius: 6px; font-size: 0.9rem; outline: none; }
     input[type="text"], input[type="email"], input[type="password"], input[type="number"], input[type="date"], select { width: 100%; }
     button { background: var(--primary); color: white; border: none; font-weight: bold; cursor: pointer; transition: opacity 0.2s; }
     button:hover { opacity: 0.9; }
 
+    /* Transactions List */
     .transactions { background: var(--card-bg); border-radius: 10px; box-shadow: 0 2px 5px rgba(0,0,0,0.05); padding: 15px; }
-    .transactions h2 { font-size: 1.1rem; margin-bottom: 15px; border-bottom: 1px solid var(--border); padding-bottom: 5px; }
     ul { list-style: none; }
-    li { display: flex; justify-content: space-between; align-items: center; padding: 10px 0; border-bottom: 1px solid #f0f0f0; }
+    li { display: flex; justify-content: space-between; align-items: center; padding: 12px 0; border-bottom: 1px solid #f0f0f0; }
     li:last-child { border-bottom: none; }
-    .tx-info { display: flex; flex-direction: column; gap: 2px; }
+    .tx-info { display: flex; flex-direction: column; gap: 3px; }
     .tx-title { font-weight: 600; font-size: 0.95rem; }
     .tx-details { font-size: 0.75rem; color: #888; display: flex; gap: 8px; flex-wrap: wrap; }
     .tx-amount { font-weight: bold; font-size: 0.95rem; display: flex; align-items: center; gap: 8px; }
@@ -61,7 +75,7 @@
     .tx-amount.minus { color: var(--expense); }
     .delete-btn { background: none; border: none; color: #bbb; font-weight: bold; cursor: pointer; font-size: 1.1rem; padding: 0 5px; }
     .delete-btn:hover { color: var(--expense); }
-    .empty-msg { text-align: center; color: #999; font-size: 0.9rem; padding: 10px 0; }
+    .empty-msg { text-align: center; color: #999; font-size: 0.9rem; padding: 15px 0; }
     .hidden { display: none !important; }
   </style>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
@@ -88,60 +102,90 @@
         <button class="logout-btn" onclick="logout()">Esci</button>
       </div>
 
-      <div class="filter-container">
-        <label for="month-filter">📅 Periodo:</label>
-        <select id="month-filter" onchange="applyFilter()">
-          <option value="all">Tutti i movimenti</option>
-        </select>
+      <!-- Tab Navigation -->
+      <div class="tab-nav">
+        <button class="tab-btn active" onclick="switchTab('tab-inserimento')">➕ Nuovo Movimento</button>
+        <button class="tab-btn" onclick="switchTab('tab-storico')">📋 Storico Movimenti</button>
       </div>
 
-      <div class="dashboard">
-        <div class="card">
-          <h3>Saldo</h3>
-          <p id="total-balance" class="balance">€0.00</p>
-        </div>
-        <div class="card">
-          <h3>Entrate</h3>
-          <p id="total-income" class="income-val">+€0.00</p>
-        </div>
-        <div class="card">
-          <h3>Uscite</h3>
-          <p id="total-expense" class="expense-val">-€0.00</p>
-        </div>
-      </div>
-
-      <form id="tx-form">
-        <input type="text" id="descrizione" placeholder="Descrizione (es. Spesa, Fattura...)" required>
+      <!-- TAB 1: Inserimento Nuovo Movimento -->
+      <div id="tab-inserimento" class="tab-content active">
         
-        <!-- Campo Fornitore/Cliente con supporto auto-completamento da datalist -->
-        <input type="text" id="entita" list="entita-list" placeholder="Fornitore / Cliente (seleziona o scrivi nuovo)" autocomplete="off">
-        <datalist id="entita-list"></datalist>
-
-        <div class="form-group">
-          <input type="number" id="importo" placeholder="Importo (€)" step="0.01" min="0.01" required>
-          <input type="date" id="data" required>
+        <!-- Totali Mese Corrente -->
+        <div class="dashboard-title" id="current-month-label">Mese Corrente</div>
+        <div class="dashboard">
+          <div class="card">
+            <h3>Saldo</h3>
+            <p id="cur-total-balance" class="balance">€0.00</p>
+          </div>
+          <div class="card">
+            <h3>Entrate</h3>
+            <p id="cur-total-income" class="income-val">+€0.00</p>
+          </div>
+          <div class="card">
+            <h3>Uscite</h3>
+            <p id="cur-total-expense" class="expense-val">-€0.00</p>
+          </div>
         </div>
-        <div class="form-group">
-          <select id="tipo">
-            <option value="uscita">Uscita</option>
-            <option value="entrata">Entrata</option>
-          </select>
-          <select id="categoria">
-            <option value="Cibo">Cibo & Spesa</option>
-            <option value="Trasporti">Trasporti & Auto</option>
-            <option value="Casa">Casa & Bollette</option>
-            <option value="Svago">Svago & Intrattenimento</option>
-            <option value="Lavoro">Lavoro & Stipendio</option>
-            <option value="Altro">Altro</option>
-          </select>
-        </div>
-        <button type="submit">Aggiungi Movimento</button>
-      </form>
 
-      <div class="transactions">
-        <h2>Storico Movimenti</h2>
-        <ul id="tx-list"></ul>
+        <form id="tx-form">
+          <input type="text" id="descrizione" placeholder="Descrizione (es. Spesa, Fattura...)" required>
+          
+          <input type="text" id="entita" list="entita-list" placeholder="Fornitore / Cliente (seleziona o scrivi nuovo)" autocomplete="off">
+          <datalist id="entita-list"></datalist>
+
+          <div class="form-group">
+            <input type="number" id="importo" placeholder="Importo (€)" step="0.01" min="0.01" required>
+            <input type="date" id="data" required>
+          </div>
+          <div class="form-group">
+            <select id="tipo">
+              <option value="uscita">Uscita</option>
+              <option value="entrata">Entrata</option>
+            </select>
+            <select id="categoria">
+              <option value="Cibo">Cibo & Spesa</option>
+              <option value="Trasporti">Trasporti & Auto</option>
+              <option value="Casa">Casa & Bollette</option>
+              <option value="Svago">Svago & Intrattenimento</option>
+              <option value="Lavoro">Lavoro & Stipendio</option>
+              <option value="Altro">Altro</option>
+            </select>
+          </div>
+          <button type="submit">Aggiungi Movimento</button>
+        </form>
       </div>
+
+      <!-- TAB 2: Storico Movimenti -->
+      <div id="tab-storico" class="tab-content">
+        <div class="filter-container">
+          <label for="month-filter">📅 Periodo:</label>
+          <select id="month-filter" onchange="applyFilter()">
+            <option value="all">Tutti i movimenti</option>
+          </select>
+        </div>
+
+        <!-- Totali Filtrati Storico -->
+        <div class="dashboard">
+          <div class="card">
+            <h3>Saldo</h3>
+            <p id="hist-total-balance" class="balance">€0.00</p>
+          </div>
+          <div class="card">
+            <h3>Entrate</h3>
+            <p id="hist-total-income" class="income-val">+€0.00</p>
+          </div>
+          <div class="card">
+            <h3>Uscite</h3>
+            <p id="hist-total-expense" class="expense-val">-€0.00</p>
+          </div>
+        </div>
+
+        <div class="transactions">
+          <ul id="tx-list"></ul>
+        </div>
+      </div>
+
     </div>
 
   </div>
@@ -158,9 +202,18 @@
 
     const authSection = document.getElementById('auth-section');
     const appSection = document.getElementById('app-section');
-    const balanceEl = document.getElementById('total-balance');
-    const incomeEl = document.getElementById('total-income');
-    const expenseEl = document.getElementById('total-expense');
+    
+    // Elementi Saldo Tab Inserimento
+    const curBalanceEl = document.getElementById('cur-total-balance');
+    const curIncomeEl = document.getElementById('cur-total-income');
+    const curExpenseEl = document.getElementById('cur-total-expense');
+    const currentMonthLabel = document.getElementById('current-month-label');
+
+    // Elementi Saldo Tab Storico
+    const histBalanceEl = document.getElementById('hist-total-balance');
+    const histIncomeEl = document.getElementById('hist-total-income');
+    const histExpenseEl = document.getElementById('hist-total-expense');
+
     const listEl = document.getElementById('tx-list');
     const formEl = document.getElementById('tx-form');
     const dateInput = document.getElementById('data');
@@ -170,7 +223,18 @@
     const nomiMesi = ['Gennaio', 'Febbraio', 'Marzo', 'Aprile', 'Maggio', 'Giugno', 'Luglio', 'Agosto', 'Settembre', 'Ottobre', 'Novembre', 'Dicembre'];
     dateInput.valueAsDate = new Date();
 
-    // Monitoraggio dello stato di autenticazione dell'utente
+    // Gestione del cambio Tab
+    function switchTab(tabId) {
+      document.querySelectorAll('.tab-content').forEach(tab => tab.classList.remove('active'));
+      document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
+
+      document.getElementById(tabId).classList.add('active');
+      
+      const activeBtnIndex = tabId === 'tab-inserimento' ? 0 : 1;
+      document.querySelectorAll('.tab-btn')[activeBtnIndex].classList.add('active');
+    }
+
+    // Monitoraggio dello stato di autenticazione
     supabaseClient.auth.onAuthStateChange((event, session) => {
       if (session) {
         currentUser = session.user;
@@ -226,9 +290,29 @@
       updateEntitaDatalist();
       populateMonthFilter();
       applyFilter();
+      updateCurrentMonthDashboard();
     }
 
-    // Estrae i fornitori/clienti unici già salvati e aggiorna la datalist
+    // Calcola e aggiorna i totali del mese corrente nella tab Inserimento
+    function updateCurrentMonthDashboard() {
+      const now = new Date();
+      const currentYear = now.getFullYear();
+      const currentMonth = String(now.getMonth() + 1).padStart(2, '0');
+      const currentKey = `${currentYear}-${currentMonth}`;
+
+      currentMonthLabel.innerText = `Riepilogo (${nomiMesi[now.getMonth()]} ${currentYear})`;
+
+      const tMese = transazioni.filter(t => t.data && t.data.startsWith(currentKey));
+
+      const total = tMese.reduce((acc, t) => acc + (t.tipo === 'entrata' ? parseFloat(t.importo) : -parseFloat(t.importo)), 0).toFixed(2);
+      const income = tMese.filter(t => t.tipo === 'entrata').reduce((acc, t) => acc + parseFloat(t.importo), 0).toFixed(2);
+      const expense = tMese.filter(t => t.tipo === 'uscita').reduce((acc, t) => acc + parseFloat(t.importo), 0).toFixed(2);
+
+      curBalanceEl.innerText = `€${total}`;
+      curIncomeEl.innerText = `+€${income}`;
+      curExpenseEl.innerText = `-€${expense}`;
+    }
+
     function updateEntitaDatalist() {
       entitaDatalist.innerHTML = '';
       const entitaUniche = new Set();
@@ -279,14 +363,14 @@
       renderUI();
     }
 
-    function updateValues() {
+    function updateHistoryValues() {
       const total = transazioniFiltrate.reduce((acc, t) => acc + (t.tipo === 'entrata' ? parseFloat(t.importo) : -parseFloat(t.importo)), 0).toFixed(2);
       const income = transazioniFiltrate.filter(t => t.tipo === 'entrata').reduce((acc, t) => acc + parseFloat(t.importo), 0).toFixed(2);
       const expense = transazioniFiltrate.filter(t => t.tipo === 'uscita').reduce((acc, t) => acc + parseFloat(t.importo), 0).toFixed(2);
 
-      balanceEl.innerText = `€${total}`;
-      incomeEl.innerText = `+€${income}`;
-      expenseEl.innerText = `-€${expense}`;
+      histBalanceEl.innerText = `€${total}`;
+      histIncomeEl.innerText = `+€${income}`;
+      histExpenseEl.innerText = `-€${expense}`;
     }
 
     function formatDate(dateString) {
@@ -303,13 +387,15 @@
         transazioniFiltrate.forEach(t => {
           const isIncome = t.tipo === 'entrata';
           const entitaText = t.entita ? ` • 👤 ${t.entita}` : '';
+          const categoriaVal = t.category || t.categoria || 'Generale';
+
           const li = document.createElement('li');
           li.innerHTML = `
             <div class="tx-info">
               <span class="tx-title">${t.descrizione}</span>
               <div class="tx-details">
                 <span>📅 ${formatDate(t.data)}</span>
-                <span>• ${t.categoria}</span>
+                <span>• ${categoriaVal}</span>
                 ${entitaText ? `<span>${entitaText}</span>` : ''}
               </div>
             </div>
@@ -321,7 +407,7 @@
           listEl.appendChild(li);
         });
       }
-      updateValues();
+      updateHistoryValues();
     }
 
     formEl.addEventListener('submit', async (e) => {
@@ -341,7 +427,7 @@
         importo, 
         data: dataVal, 
         tipo, 
-        categoria, 
+        category: categoria,
         user_id: currentUser.id 
       };
 
@@ -359,6 +445,7 @@
       updateEntitaDatalist();
       populateMonthFilter();
       applyFilter();
+      updateCurrentMonthDashboard();
       formEl.reset();
       dateInput.valueAsDate = new Date();
     });
@@ -377,6 +464,7 @@
       updateEntitaDatalist();
       populateMonthFilter();
       applyFilter();
+      updateCurrentMonthDashboard();
     };
   </script>
 </body>
