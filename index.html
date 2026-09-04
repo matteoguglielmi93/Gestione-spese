@@ -1,0 +1,239 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Gestione Spese Personali</title>
+  <style>
+    :root {
+      --bg: #f4f6f9;
+      --card-bg: #ffffff;
+      --text: #333333;
+      --primary: #4a90e2;
+      --income: #2ecc71;
+      --expense: #e74c3c;
+      --border: #e0e0e0;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
+    body { background-color: var(--bg); color: var(--text); padding: 20px; display: flex; justify-content: center; }
+    .container { width: 100%; max-width: 500px; }
+
+    h1 { text-align: center; margin-bottom: 20px; font-size: 1.5rem; color: #111; }
+
+    /* Dashboard Bilancio */
+    .dashboard { display: flex; gap: 10px; margin-bottom: 20px; }
+    .card { flex: 1; background: var(--card-bg); padding: 15px; border-radius: 10px; box-shadow: 0 2px 5px rgba(0,0,0,0.05); text-align: center; }
+    .card h3 { font-size: 0.8rem; color: #666; text-transform: uppercase; margin-bottom: 5px; }
+    .card p { font-size: 1.2rem; font-weight: bold; }
+    .balance { color: var(--primary); }
+    .income-val { color: var(--income); }
+    .expense-val { color: var(--expense); }
+
+    /* Form Inserimento */
+    form { background: var(--card-bg); padding: 15px; border-radius: 10px; box-shadow: 0 2px 5px rgba(0,0,0,0.05); margin-bottom: 20px; display: flex; flex-direction: column; gap: 10px; }
+    .form-group { display: flex; gap: 10px; }
+    input, select, button { padding: 10px; border: 1px solid var(--border); border-radius: 6px; font-size: 0.9rem; outline: none; }
+    input[type="text"], input[type="number"], input[type="date"], select { width: 100%; }
+    button { background: var(--primary); color: white; border: none; font-weight: bold; cursor: pointer; transition: opacity 0.2s; }
+    button:hover { opacity: 0.9; }
+
+    /* Lista Transazioni */
+    .transactions { background: var(--card-bg); border-radius: 10px; box-shadow: 0 2px 5px rgba(0,0,0,0.05); padding: 15px; }
+    .transactions h2 { font-size: 1.1rem; margin-bottom: 15px; border-bottom: 1px solid var(--border); padding-bottom: 5px; }
+    ul { list-style: none; }
+    li { display: flex; justify-content: space-between; align-items: center; padding: 10px 0; border-bottom: 1px solid #f0f0f0; }
+    li:last-child { border-bottom: none; }
+    .tx-info { display: flex; flex-direction: column; gap: 2px; }
+    .tx-title { font-weight: 600; font-size: 0.95rem; }
+    .tx-details { font-size: 0.75rem; color: #888; display: flex; gap: 8px; }
+    .tx-amount { font-weight: bold; font-size: 0.95rem; display: flex; align-items: center; gap: 8px; }
+    .tx-amount.plus { color: var(--income); }
+    .tx-amount.minus { color: var(--expense); }
+    .delete-btn { background: none; border: none; color: #bbb; font-weight: bold; cursor: pointer; font-size: 1.1rem; padding: 0 5px; }
+    .delete-btn:hover { color: var(--expense); }
+    .empty-msg { text-align: center; color: #999; font-size: 0.9rem; padding: 10px 0; }
+  </style>
+</head>
+<body>
+
+  <div class="container">
+    <h1>Gestione Spese</h1>
+
+    <!-- Dashboard -->
+    <div class="dashboard">
+      <div class="card">
+        <h3>Saldo</h3>
+        <p id="total-balance" class="balance">€0.00</p>
+      </div>
+      <div class="card">
+        <h3>Entrate</h3>
+        <p id="total-income" class="income-val">+€0.00</p>
+      </div>
+      <div class="card">
+        <h3>Uscite</h3>
+        <p id="total-expense" class="expense-val">-€0.00</p>
+      </div>
+    </div>
+
+    <!-- Form Aggiungi Transazione -->
+    <form id="tx-form">
+      <input type="text" id="description" placeholder="Descrizione (es. Spesa, Stipendio)" required>
+      
+      <div class="form-group">
+        <input type="number" id="amount" placeholder="Importo (€)" step="0.01" min="0.01" required>
+        <input type="date" id="date" required>
+      </div>
+
+      <div class="form-group">
+        <select id="type">
+          <option value="expense">Uscita</option>
+          <option value="income">Entrata</option>
+        </select>
+        <select id="category">
+          <option value="Cibo">Cibo & Spesa</option>
+          <option value="Trasporti">Trasporti & Auto</option>
+          <option value="Casa">Casa & Bollette</option>
+          <option value="Svago">Svago & Intrattenimento</option>
+          <option value="Lavoro">Lavoro & Stipendio</option>
+          <option value="Altro">Altro</option>
+        </select>
+      </div>
+
+      <button type="submit">Aggiungi Movimento</button>
+    </form>
+
+    <!-- Lista Movimenti -->
+    <div class="transactions">
+      <h2>Storico Movimenti</h2>
+      <ul id="tx-list"></ul>
+    </div>
+  </div>
+
+  <script>
+    // Stato dell'applicazione
+    let transactions = JSON.parse(localStorage.getItem('transactions')) || [];
+
+    // Elementi DOM
+    const balanceEl = document.getElementById('total-balance');
+    const incomeEl = document.getElementById('total-income');
+    const expenseEl = document.getElementById('total-expense');
+    const listEl = document.getElementById('tx-list');
+    const formEl = document.getElementById('tx-form');
+    const dateInput = document.getElementById('date');
+
+    // Imposta la data odierna come default nell'input date
+    dateInput.valueAsDate = new Date();
+
+    // Salva i dati nel localStorage
+    function updateLocalStorage() {
+      localStorage.setItem('transactions', JSON.stringify(transactions));
+    }
+
+    // Calcola il bilancio complessivo
+    function updateValues() {
+      const total = transactions
+        .reduce((acc, t) => acc + (t.type === 'income' ? t.amount : -t.amount), 0)
+        .toFixed(2);
+      
+      const income = transactions
+        .filter(t => t.type === 'income')
+        .reduce((acc, t) => acc + t.amount, 0)
+        .toFixed(2);
+
+      const expense = transactions
+        .filter(t => t.type === 'expense')
+        .reduce((acc, t) => acc + t.amount, 0)
+        .toFixed(2);
+
+      balanceEl.innerText = `€${total}`;
+      incomeEl.innerText = `+€${income}`;
+      expenseEl.innerText = `-€${expense}`;
+    }
+
+    // Formatta la data YYYY-MM-DD in formato italiano DD/MM/YYYY
+    function formatDate(dateString) {
+      if (!dateString) return '';
+      const [year, month, day] = dateString.split('-');
+      return `${day}/${month}/${year}`;
+    }
+
+    // Aggiunge una transazione alla lista nell'interfaccia
+    function addTransactionDOM(transaction) {
+      const isIncome = transaction.type === 'income';
+      const sign = isIncome ? '+' : '-';
+      const itemClass = isIncome ? 'plus' : 'minus';
+
+      const li = document.createElement('li');
+      li.innerHTML = `
+        <div class="tx-info">
+          <span class="tx-title">${transaction.description}</span>
+          <div class="tx-details">
+            <span>📅 ${formatDate(transaction.date)}</span>
+            <span>• ${transaction.category}</span>
+          </div>
+        </div>
+        <div class="tx-amount ${itemClass}">
+          ${sign}€${transaction.amount.toFixed(2)}
+          <button class="delete-btn" onclick="removeTransaction('${transaction.id}')">&times;</button>
+        </div>
+      `;
+
+      listEl.appendChild(li);
+    }
+
+    // Rende l'interfaccia sincronizzata con i dati (ordinati per data decrescente)
+    function init() {
+      listEl.innerHTML = '';
+      if (transactions.length === 0) {
+        listEl.innerHTML = '<p class="empty-msg">Nessuna transazione registrata.</p>';
+      } else {
+        // Ordina i movimenti dal più recente al più vecchio
+        const sortedTransactions = [...transactions].sort((a, b) => new Date(b.date) - new Date(a.date));
+        sortedTransactions.forEach(addTransactionDOM);
+      }
+      updateValues();
+    }
+
+    // Gestione Invio Form
+    formEl.addEventListener('submit', (e) => {
+      e.preventDefault();
+
+      const description = document.getElementById('description').value.trim();
+      const amount = parseFloat(document.getElementById('amount').value);
+      const date = dateInput.value;
+      const type = document.getElementById('type').value;
+      const category = document.getElementById('category').value;
+
+      if (!description || isNaN(amount) || !date) return;
+
+      const newTx = {
+        id: Date.now().toString(),
+        description,
+        amount,
+        date,
+        type,
+        category
+      };
+
+      transactions.push(newTx);
+      updateLocalStorage();
+      init();
+
+      // Reset Form ma mantieni la data corrente
+      formEl.reset();
+      dateInput.valueAsDate = new Date();
+    });
+
+    // Rimuove una transazione tramite ID
+    window.removeTransaction = function(id) {
+      transactions = transactions.filter(t => t.id !== id);
+      updateLocalStorage();
+      init();
+    };
+
+    // Inizializzazione
+    init();
+  </script>
+</body>
+</html>
