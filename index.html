@@ -55,7 +55,7 @@
     li:last-child { border-bottom: none; }
     .tx-info { display: flex; flex-direction: column; gap: 2px; }
     .tx-title { font-weight: 600; font-size: 0.95rem; }
-    .tx-details { font-size: 0.75rem; color: #888; display: flex; gap: 8px; }
+    .tx-details { font-size: 0.75rem; color: #888; display: flex; gap: 8px; flex-wrap: wrap; }
     .tx-amount { font-weight: bold; font-size: 0.95rem; display: flex; align-items: center; gap: 8px; }
     .tx-amount.plus { color: var(--income); }
     .tx-amount.minus { color: var(--expense); }
@@ -111,7 +111,12 @@
       </div>
 
       <form id="tx-form">
-        <input type="text" id="descrizione" placeholder="Descrizione" required>
+        <input type="text" id="descrizione" placeholder="Descrizione (es. Spesa, Fattura...)" required>
+        
+        <!-- Campo Fornitore/Cliente con supporto auto-completamento da datalist -->
+        <input type="text" id="entita" list="entita-list" placeholder="Fornitore / Cliente (seleziona o scrivi nuovo)" autocomplete="off">
+        <datalist id="entita-list"></datalist>
+
         <div class="form-group">
           <input type="number" id="importo" placeholder="Importo (€)" step="0.01" min="0.01" required>
           <input type="date" id="data" required>
@@ -160,6 +165,7 @@
     const formEl = document.getElementById('tx-form');
     const dateInput = document.getElementById('data');
     const filterSelect = document.getElementById('month-filter');
+    const entitaDatalist = document.getElementById('entita-list');
 
     const nomiMesi = ['Gennaio', 'Febbraio', 'Marzo', 'Aprile', 'Maggio', 'Giugno', 'Luglio', 'Agosto', 'Settembre', 'Ottobre', 'Novembre', 'Dicembre'];
     dateInput.valueAsDate = new Date();
@@ -217,8 +223,27 @@
       }
 
       transazioni = data;
+      updateEntitaDatalist();
       populateMonthFilter();
       applyFilter();
+    }
+
+    // Estrae i fornitori/clienti unici già salvati e aggiorna la datalist
+    function updateEntitaDatalist() {
+      entitaDatalist.innerHTML = '';
+      const entitaUniche = new Set();
+
+      transazioni.forEach(t => {
+        if (t.entita && t.entita.trim() !== '') {
+          entitaUniche.add(t.entita.trim());
+        }
+      });
+
+      Array.from(entitaUniche).sort().forEach(entita => {
+        const option = document.createElement('option');
+        option.value = entita;
+        entitaDatalist.appendChild(option);
+      });
     }
 
     function populateMonthFilter() {
@@ -277,6 +302,7 @@
       } else {
         transazioniFiltrate.forEach(t => {
           const isIncome = t.tipo === 'entrata';
+          const entitaText = t.entita ? ` • 👤 ${t.entita}` : '';
           const li = document.createElement('li');
           li.innerHTML = `
             <div class="tx-info">
@@ -284,6 +310,7 @@
               <div class="tx-details">
                 <span>📅 ${formatDate(t.data)}</span>
                 <span>• ${t.categoria}</span>
+                ${entitaText ? `<span>${entitaText}</span>` : ''}
               </div>
             </div>
             <div class="tx-amount ${isIncome ? 'plus' : 'minus'}">
@@ -300,6 +327,7 @@
     formEl.addEventListener('submit', async (e) => {
       e.preventDefault();
       const descrizione = document.getElementById('descrizione').value.trim();
+      const entita = document.getElementById('entita').value.trim();
       const importo = parseFloat(document.getElementById('importo').value);
       const dataVal = dateInput.value;
       const tipo = document.getElementById('tipo').value;
@@ -309,6 +337,7 @@
 
       const nuovaTx = { 
         descrizione, 
+        entita: entita || null,
         importo, 
         data: dataVal, 
         tipo, 
@@ -327,6 +356,7 @@
       }
 
       transazioni.unshift(data[0]);
+      updateEntitaDatalist();
       populateMonthFilter();
       applyFilter();
       formEl.reset();
@@ -344,6 +374,7 @@
         return;
       }
       transazioni = transazioni.filter(t => t.id !== id);
+      updateEntitaDatalist();
       populateMonthFilter();
       applyFilter();
     };
