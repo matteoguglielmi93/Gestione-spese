@@ -131,9 +131,8 @@
           <input type="number" step="0.01" id="importo" placeholder="Importo (€)" required>
           <input type="date" id="data" required>
           
-          <!-- Cliente / Fornitore (con datalist dinamico) -->
-          <input type="text" id="entita" placeholder="Cliente / Fornitore (Opzionale)" list="entita-datalist">
-          <datalist id="entita-datalist"></datalist>
+          <!-- Cliente / Fornitore (Testo libero) -->
+          <input type="text" id="entita" placeholder="Cliente / Fornitore (Opzionale)">
 
           <select id="tipo">
             <option value="uscita">Uscita</option>
@@ -154,9 +153,8 @@
       <ul id="list-transactions" class="item-list"></ul>
     </div>
 
-    <!-- TAB 3: GESTIONE ANAGRAFICHE -->
+    <!-- TAB 3: GESTIONE CATEGORIE -->
     <div id="tab-gestione" class="tab-content hidden">
-      <!-- Gestione Categorie -->
       <div class="card">
         <h3>📂 Gestione Categorie</h3>
         <form id="form-category" style="display: flex; gap: 8px; margin-bottom: 12px;">
@@ -169,21 +167,6 @@
         </form>
         <ul id="list-categories" class="item-list"></ul>
       </div>
-
-      <!-- Gestione Clienti / Fornitori -->
-      <div class="card">
-        <h3>👥 Gestione Clienti / Fornitori</h3>
-        <form id="form-entity" style="display: flex; gap: 8px; margin-bottom: 12px;">
-          <input type="text" id="new-entity-name" placeholder="Nome Cliente / Fornitore" required style="flex:2;">
-          <select id="new-entity-type" style="flex:1;">
-            <option value="fornitore">Fornitore</option>
-            <option value="cliente">Cliente</option>
-            <option value="entrambi">Entrambi</option>
-          </select>
-          <button type="submit" style="width: auto;">+ Aggiungi</button>
-        </form>
-        <ul id="list-entities" class="item-list"></ul>
-      </div>
     </div>
 
   </div>
@@ -194,14 +177,28 @@
     // 1. CONFIGURAZIONE SUPABASE
     const SUPABASE_URL = 'https://owqspxfgueqzivrwvupp.supabase.co'; // Sostituisci con il tuo URL
     const SUPABASE_ANON_KEY = 'sb_publishable_HEp-x3FM0m_Ym8h7O1etFw_0ZojwUk7'; // Sostituisci con la tua chiave
-    const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+    const supabaseProvider = window.supabase || supabase;
+    const supabaseClient = supabaseProvider.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+    // Categorie predefinite fisse
+    const defaultCategories = [
+      { id: 'def-1', name: 'Casa & Utenze', type: 'uscita' },
+      { id: 'def-2', name: 'Spesa & Cibo', type: 'uscita' },
+      { id: 'def-3', name: 'Trasporti & Auto', type: 'uscita' },
+      { id: 'def-4', name: 'Svago & Tempo Libero', type: 'uscita' },
+      { id: 'def-5', name: 'Salute & Benessere', type: 'uscita' },
+      { id: 'def-6', name: 'Shopping & Abbigliamento', type: 'uscita' },
+      { id: 'def-7', name: 'Stipendio', type: 'entrata' },
+      { id: 'def-8', name: 'Rimborso', type: 'entrata' },
+      { id: 'def-9', name: 'Altro', type: 'uscita' }
+    ];
 
     // Variabili di Stato
     let currentUser = null;
     let transazioni = [];
-    let categorie = [];
-    let entitaList = [];
-    let isSummaryVisible = false; // Di default i saldi sono nascosti
+    let categorie = [...defaultCategories];
+    let isSummaryVisible = false; // Nascosto di default
 
     // Inizializzazione data odierna
     document.getElementById('data').valueAsDate = new Date();
@@ -223,15 +220,31 @@
 
     // ================= GESTIONE AUTH =================
     async function login() {
-      const email = document.getElementById('auth-email').value;
+      const email = document.getElementById('auth-email').value.trim();
       const password = document.getElementById('auth-password').value;
-      const { error } = await supabaseClient.auth.signInWithPassword({ email, password });
-      if (error) alert('Errore login: ' + error.message);
+
+      if (!email || !password) {
+        alert('Inserisci email e password');
+        return;
+      }
+
+      const { data, error } = await supabaseClient.auth.signInWithPassword({ email, password });
+      if (error) {
+        alert('Errore login: ' + error.message);
+      } else if (data.user) {
+        onLoginSuccess(data.user);
+      }
     }
 
     async function signUp() {
-      const email = document.getElementById('auth-email').value;
+      const email = document.getElementById('auth-email').value.trim();
       const password = document.getElementById('auth-password').value;
+
+      if (!email || !password) {
+        alert('Inserisci email e password');
+        return;
+      }
+
       const { error } = await supabaseClient.auth.signUp({ email, password });
       if (error) alert('Errore registrazione: ' + error.message);
       else alert('Registrazione effettuata! Controlla la mail per la conferma.');
@@ -278,8 +291,7 @@
     function onLogoutSuccess() {
       currentUser = null;
       transazioni = [];
-      categorie = [];
-      entitaList = [];
+      categorie = [...defaultCategories];
       isSummaryVisible = false;
       document.getElementById('auth-section').classList.remove('hidden');
       document.getElementById('app-section').classList.add('hidden');
@@ -306,60 +318,39 @@
       updateDashboard();
     }
 
-    // ================= CARICAMENTO ANAGRAFICHE (CATEGORIE & ENTITÀ) =================
+    // ================= CARICAMENTO CATEGORIE =================
     async function loadMasterData() {
       if (!currentUser) return;
 
-      // Carica Categorie
       const { data: catData, error: catErr } = await supabaseClient
         .from('categories')
         .select('*')
         .order('name');
-      if (!catErr) categorie = catData || [];
 
-      // Carica Entità (Clienti/Fornitori)
-      const { data: entData, error: entErr } = await supabaseClient
-        .from('entities')
-        .select('*')
-        .order('name');
-      if (!entErr) entitaList = entData || [];
+      if (!catErr && catData && catData.length > 0) {
+        // Unisci le categorie custom caricate dal DB a quelle default
+        categorie = [...defaultCategories, ...catData];
+      } else {
+        categorie = [...defaultCategories];
+      }
 
       renderMasterDataLists();
       populateDropdowns();
     }
 
     function renderMasterDataLists() {
-      // Render Categorie
       const catListEl = document.getElementById('list-categories');
       catListEl.innerHTML = categorie.map(c => `
         <li>
           <span><strong>${c.name}</strong> <small>(${c.type})</small></span>
-          <button onclick="deleteCategory(${c.id})" class="btn-danger" style="width:auto; padding: 4px 8px;">❌</button>
-        </li>
-      `).join('');
-
-      // Render Entità
-      const entListEl = document.getElementById('list-entities');
-      entListEl.innerHTML = entitaList.map(e => `
-        <li>
-          <span><strong>${e.name}</strong> <small>(${e.type})</small></span>
-          <button onclick="deleteEntity(${e.id})" class="btn-danger" style="width:auto; padding: 4px 8px;">❌</button>
+          ${String(c.id).startsWith('def-') ? '<small style="color:#999;">(Predefinita)</small>' : `<button onclick="deleteCategory(${c.id})" class="btn-danger" style="width:auto; padding: 4px 8px;">❌</button>`}
         </li>
       `).join('');
     }
 
     function populateDropdowns() {
-      // Popola select Categoria
       const catSelect = document.getElementById('categoria');
-      if (categorie.length === 0) {
-        catSelect.innerHTML = '<option value="">Nessuna categoria (aggiungila in Gestione)</option>';
-      } else {
-        catSelect.innerHTML = categorie.map(c => `<option value="${c.name}">${c.name} (${c.type})</option>`).join('');
-      }
-
-      // Popola datalist Entità
-      const datalist = document.getElementById('entita-datalist');
-      datalist.innerHTML = entitaList.map(e => `<option value="${e.name}">`).join('');
+      catSelect.innerHTML = categorie.map(c => `<option value="${c.name}">${c.name} (${c.type})</option>`).join('');
     }
 
     // Salvataggio Nuova Categoria
@@ -385,30 +376,6 @@
       }
     });
 
-    // Salvataggio Nuova Entità
-    document.getElementById('form-entity').addEventListener('submit', async (e) => {
-      e.preventDefault();
-      const name = document.getElementById('new-entity-name').value.trim();
-      const type = document.getElementById('new-entity-type').value;
-
-      if (!name) return;
-
-      const { data, error } = await supabaseClient
-        .from('entities')
-        .insert([{ name, type, user_id: currentUser.id }])
-        .select();
-
-      if (error) {
-        alert('Errore aggiunta entità: ' + error.message);
-      } else {
-        entitaList.push(data[0]);
-        renderMasterDataLists();
-        populateDropdowns();
-        document.getElementById('new-entity-name').value = '';
-      }
-    });
-
-    // Eliminazione Categoria ed Entità
     async function deleteCategory(id) {
       if (!confirm('Eliminare questa categoria?')) return;
       const { error } = await supabaseClient.from('categories').delete().eq('id', id);
@@ -420,19 +387,6 @@
         alert('Errore: ' + error.message);
       }
     }
-
-    async function deleteEntity(id) {
-      if (!confirm('Eliminare questo cliente/fornitore?')) return;
-      const { error } = await supabaseClient.from('entities').delete().eq('id', id);
-      if (!error) {
-        entitaList = entitaList.filter(e => e.id !== id);
-        renderMasterDataLists();
-        populateDropdowns();
-      } else {
-        alert('Errore: ' + error.message);
-      }
-    }
-
 
     // ================= GESTIONE TRANSAZIONI =================
     async function loadTransactions() {
