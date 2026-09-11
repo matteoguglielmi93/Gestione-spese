@@ -4,649 +4,466 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Gestione Spese Personali</title>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <style>
-    :root {
-      --bg: #f4f6f9;
-      --card-bg: #ffffff;
-      --text: #333333;
-      --primary: #4a90e2;
-      --income: #2ecc71;
-      --expense: #e74c3c;
-      --border: #e0e0e0;
-    }
+    * { box-sizing: border-box; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+    body { background-color: #f4f6f9; margin: 0; padding: 16px; color: #333; }
+    .hidden { display: none !important; }
+    .card { background: #fff; border-radius: 12px; padding: 16px; margin-bottom: 16px; box-shadow: 0 2px 8px rgba(0,0,0,0.05); }
+    h1, h2, h3 { margin-top: 0; }
+    
+    /* Form & Input */
+    input, select, button { width: 100%; padding: 12px; border-radius: 8px; border: 1px solid #ccc; margin-bottom: 10px; font-size: 1rem; }
+    button { background-color: #007aff; color: white; border: none; font-weight: bold; cursor: pointer; }
+    button:active { background-color: #0056b3; }
+    .btn-secondary { background-color: #e5e5ea; color: #333; }
+    .btn-danger { background-color: #ff3b30; color: white; }
+    
+    /* Layout Auth */
+    .auth-container { max-width: 400px; margin: 40px auto; }
+    .auth-links { text-align: center; margin-top: 10px; }
+    .auth-links a { color: #007aff; text-decoration: none; cursor: pointer; font-size: 0.9rem; }
 
-    * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
-    body { background-color: var(--bg); color: var(--text); padding: 20px; display: flex; justify-content: center; }
-    .container { width: 100%; max-width: 550px; }
+    /* Nav Tabs */
+    .nav-tabs { display: flex; gap: 8px; margin-bottom: 16px; overflow-x: auto; }
+    .nav-tabs button { flex: 1; margin-bottom: 0; padding: 10px; white-space: nowrap; }
+    .nav-tabs button.active { background-color: #007aff; color: white; }
+    .nav-tabs button:not(.active) { background-color: #e5e5ea; color: #333; }
 
-    /* Auth Screen */
-    .auth-card { background: var(--card-bg); padding: 25px; border-radius: 10px; box-shadow: 0 2px 5px rgba(0,0,0,0.05); text-align: center; }
-    .auth-card h2 { margin-bottom: 15px; }
-    .auth-card input { margin-bottom: 10px; }
-    .auth-card .btn-group { display: flex; gap: 10px; margin-top: 10px; }
-    .auth-links { margin-top: 15px; display: flex; justify-content: space-between; font-size: 0.85rem; }
-    .auth-links a { color: var(--primary); text-decoration: none; cursor: pointer; }
-    .auth-links a:hover { text-decoration: underline; }
+    /* Summary Dashboard Header & Grid */
+    .summary-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
+    .toggle-visibility-btn { width: auto; background: none; border: none; font-size: 1.2rem; cursor: pointer; padding: 4px 8px; color: #007aff; margin-bottom: 0; }
+    .summary-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; text-align: center; margin-bottom: 16px; }
+    .summary-box { background: #fff; padding: 12px; border-radius: 8px; box-shadow: 0 1px 4px rgba(0,0,0,0.05); }
+    .summary-box small { font-size: 0.75rem; color: #666; text-transform: uppercase; }
+    .summary-box div { font-size: 1.1rem; font-weight: bold; margin-top: 4px; }
+    .saldo { color: #007aff; }
+    .entrate { color: #34c759; }
+    .uscite { color: #ff3b30; }
 
     /* Header Bar */
-    .header-bar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; }
-    .logout-btn { background: #999; font-size: 0.8rem; padding: 5px 10px; }
+    .header-bar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
+    .header-bar h1 { margin: 0; font-size: 1.4rem; }
+    .logout-btn { width: auto; padding: 6px 12px; margin-bottom: 0; background: #ff3b30; font-size: 0.85rem; }
 
-    /* Dashboard Totali */
-    .dashboard-title { font-size: 0.85rem; font-weight: bold; color: #666; margin-bottom: 8px; text-transform: uppercase; letter-spacing: 0.5px; }
-    .dashboard { display: flex; gap: 10px; margin-bottom: 20px; }
-    .card { flex: 1; background: var(--card-bg); padding: 12px 10px; border-radius: 10px; box-shadow: 0 2px 5px rgba(0,0,0,0.05); text-align: center; }
-    .card h3 { font-size: 0.75rem; color: #666; text-transform: uppercase; margin-bottom: 5px; }
-    .card p { font-size: 1.1rem; font-weight: bold; }
-    .balance { color: var(--primary); }
-    .income-val { color: var(--income); }
-    .expense-val { color: var(--expense); }
-
-    /* Navigation Tabs */
-    .tab-nav { display: flex; gap: 5px; margin-bottom: 20px; border-bottom: 2px solid var(--border); }
-    .tab-btn { flex: 1; padding: 10px 5px; background: none; border: none; border-bottom: 3px solid transparent; font-weight: bold; font-size: 0.85rem; color: #777; cursor: pointer; transition: all 0.2s; border-radius: 6px 6px 0 0; text-align: center; }
-    .tab-btn:hover { background: rgba(0,0,0,0.03); color: var(--text); }
-    .tab-btn.active { color: var(--primary); border-bottom-color: var(--primary); background: var(--card-bg); }
-
-    /* Tab Contents */
-    .tab-content { display: none; }
-    .tab-content.active { display: block; }
-
-    /* Filter */
-    .filter-container { margin-bottom: 15px; display: flex; justify-content: space-between; align-items: center; background: var(--card-bg); padding: 10px 15px; border-radius: 10px; box-shadow: 0 2px 5px rgba(0,0,0,0.05); }
-    .filter-container label { font-size: 0.85rem; font-weight: bold; color: #555; }
-    .filter-container select { width: auto; padding: 6px 12px; font-weight: 600; }
-
-    /* Form & Controls */
-    form { background: var(--card-bg); padding: 20px; border-radius: 10px; box-shadow: 0 2px 5px rgba(0,0,0,0.05); display: flex; flex-direction: column; gap: 12px; }
-    .form-group { display: flex; gap: 10px; }
-    input, select, button { padding: 10px; border: 1px solid var(--border); border-radius: 6px; font-size: 0.9rem; outline: none; }
-    input[type="text"], input[type="email"], input[type="password"], input[type="number"], input[type="date"], select { width: 100%; }
-    button { background: var(--primary); color: white; border: none; font-weight: bold; cursor: pointer; transition: opacity 0.2s; }
-    button:hover { opacity: 0.9; }
-
-    /* Transactions List */
-    .transactions { background: var(--card-bg); border-radius: 10px; box-shadow: 0 2px 5px rgba(0,0,0,0.05); padding: 15px; }
-    ul { list-style: none; }
-    li { display: flex; justify-content: space-between; align-items: center; padding: 12px 0; border-bottom: 1px solid #f0f0f0; }
-    li:last-child { border-bottom: none; }
-    .tx-info { display: flex; flex-direction: column; gap: 3px; }
-    .tx-title { font-weight: 600; font-size: 0.95rem; }
-    .tx-details { font-size: 0.75rem; color: #888; display: flex; gap: 8px; flex-wrap: wrap; }
-    .tx-amount { font-weight: bold; font-size: 0.95rem; display: flex; align-items: center; gap: 8px; }
-    .tx-amount.plus { color: var(--income); }
-    .tx-amount.minus { color: var(--expense); }
-    .delete-btn { background: none; border: none; color: #bbb; font-weight: bold; cursor: pointer; font-size: 1.1rem; padding: 0 5px; }
-    .delete-btn:hover { color: var(--expense); }
-    .empty-msg { text-align: center; color: #999; font-size: 0.9rem; padding: 15px 0; }
-    .hidden { display: none !important; }
-
-    /* Charts Layout */
-    .chart-card { background: var(--card-bg); border-radius: 10px; padding: 15px; box-shadow: 0 2px 5px rgba(0,0,0,0.05); margin-bottom: 15px; }
-    .chart-card h3 { font-size: 0.9rem; color: #555; margin-bottom: 12px; text-align: center; }
-    .chart-container { position: relative; width: 100%; min-height: 220px; }
-    .chart-container-tall { position: relative; width: 100%; min-height: 320px; }
+    /* List items */
+    .item-list { list-style: none; padding: 0; margin: 0; }
+    .item-list li { display: flex; justify-content: space-between; align-items: center; padding: 10px 0; border-bottom: 1px solid #eee; }
+    .item-list li:last-child { border-bottom: none; }
   </style>
-
-  <!-- Supabase & Chart.js CDN -->
-  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
 <body>
 
-  <div class="container">
-    
-    <!-- Schermata di Login / Registrazione -->
-    <div id="auth-section" class="auth-card">
-      <h2 id="auth-title">Accedi o Registrati</h2>
+  <!-- ================= VISTA AUTENTICAZIONE ================= -->
+  <div id="auth-section" class="auth-container">
+    <div class="card">
+      <h2 id="auth-title" style="text-align:center;">Accedi</h2>
       
+      <!-- Login & Registrazione -->
       <div id="login-fields">
         <input type="email" id="auth-email" placeholder="Email" required>
         <input type="password" id="auth-password" placeholder="Password" required>
-        <div class="btn-group">
+        <div style="display: flex; gap: 8px;">
           <button onclick="login()">Accedi</button>
-          <button onclick="signUp()" style="background: #6c757d;">Registrati</button>
+          <button onclick="signUp()" class="btn-secondary">Registrati</button>
         </div>
         <div class="auth-links">
           <a onclick="showResetView()">Password dimenticata?</a>
         </div>
       </div>
 
-      <!-- Schermata Recupero Password -->
+      <!-- Recupero Password -->
       <div id="reset-fields" class="hidden">
-        <p style="font-size: 0.85rem; color: #666; margin-bottom: 12px;">Inserisci la tua email per ricevere il link di ripristino password.</p>
-        <input type="email" id="reset-email" placeholder="La tua Email" required>
-        <div class="btn-group">
-          <button onclick="resetPassword()">Invia Email</button>
-          <button onclick="showLoginView()" style="background: #6c757d;">Annulla</button>
+        <p style="font-size: 0.85rem; color: #666;">Inserisci la tua email per ricevere il link di ripristino.</p>
+        <input type="email" id="reset-email" placeholder="Email">
+        <div style="display: flex; gap: 8px;">
+          <button onclick="resetPassword()">Invia Link</button>
+          <button onclick="showLoginView()" class="btn-secondary">Annulla</button>
         </div>
       </div>
     </div>
+  </div>
 
-    <!-- Schermata Principale App -->
-    <div id="app-section" class="hidden">
-      <div class="header-bar">
-        <h1>Gestione Spese</h1>
-        <button class="logout-btn" onclick="logout()">Esci</button>
-      </div>
 
-      <!-- Tab Navigation -->
-      <div class="tab-nav">
-        <button class="tab-btn active" onclick="switchTab('tab-inserimento')">➕ Nuovo</button>
-        <button class="tab-btn" onclick="switchTab('tab-storico')">📋 Storico</button>
-        <button class="tab-btn" onclick="switchTab('tab-report')">📊 Report</button>
-      </div>
+  <!-- ================= VISTA APP PRINCIPALE ================= -->
+  <div id="app-section" class="hidden">
+    <div class="header-bar">
+      <h1>Gestione Spese</h1>
+      <button class="logout-btn" onclick="logout()">Logout</button>
+    </div>
 
-      <!-- TAB 1: Inserimento Nuovo Movimento -->
-      <div id="tab-inserimento" class="tab-content active">
-        <div class="dashboard-title" id="current-month-label">Mese Corrente</div>
-        <div class="dashboard">
-          <div class="card">
-            <h3>Saldo</h3>
-            <p id="cur-total-balance" class="balance">€0.00</p>
+    <!-- Navigazione Tab -->
+    <div class="nav-tabs">
+      <button class="tab-btn active" onclick="switchTab('tab-nuovo')">+ Nuovo</button>
+      <button class="tab-btn" onclick="switchTab('tab-storico')">📋 Storico</button>
+      <button class="tab-btn" onclick="switchTab('tab-gestione')">⚙️ Gestione</button>
+    </div>
+
+    <!-- TAB 1: NUOVO MOVIMENTO & RIEPILOGO -->
+    <div id="tab-nuovo" class="tab-content">
+      
+      <!-- Riepilogo con pulsante mostra/nascondi -->
+      <div style="margin-bottom: 8px;">
+        <div class="summary-header">
+          <span style="font-weight: bold; font-size: 0.9rem; color: #666;">Riepilogo Totale</span>
+          <button id="btn-toggle-visibility" class="toggle-visibility-btn" onclick="toggleSummaryVisibility()">👁️ Mostra</button>
+        </div>
+        <div class="summary-grid">
+          <div class="summary-box">
+            <small>Saldo</small>
+            <div id="summary-saldo" class="saldo">••••••</div>
           </div>
-          <div class="card">
-            <h3>Entrate</h3>
-            <p id="cur-total-income" class="income-val">+€0.00</p>
+          <div class="summary-box">
+            <small>Entrate</small>
+            <div id="summary-entrate" class="entrate">••••••</div>
           </div>
-          <div class="card">
-            <h3>Uscite</h3>
-            <p id="cur-total-expense" class="expense-val">-€0.00</p>
+          <div class="summary-box">
+            <small>Uscite</small>
+            <div id="summary-uscite" class="uscite">••••••</div>
           </div>
         </div>
+      </div>
 
-        <form id="tx-form">
-          <input type="text" id="descrizione" placeholder="Descrizione (es. Spesa, Fattura...)" required>
-          <input type="text" id="entita" list="entita-list" placeholder="Fornitore / Cliente (seleziona o scrivi nuovo)" autocomplete="off">
-          <datalist id="entita-list"></datalist>
+      <div class="card">
+        <h3>Aggiungi Movimento</h3>
+        <form id="form-transaction">
+          <input type="text" id="descrizione" placeholder="Descrizione" required>
+          <input type="number" step="0.01" id="importo" placeholder="Importo (€)" required>
+          <input type="date" id="data" required>
+          
+          <!-- Cliente / Fornitore (con datalist dinamico) -->
+          <input type="text" id="entita" placeholder="Cliente / Fornitore (Opzionale)" list="entita-datalist">
+          <datalist id="entita-datalist"></datalist>
 
-          <div class="form-group">
-            <input type="number" id="importo" placeholder="Importo (€)" step="0.01" min="0.01" required>
-            <input type="date" id="data" required>
-          </div>
-          <div class="form-group">
-            <select id="tipo">
-              <option value="uscita">Uscita</option>
-              <option value="entrata">Entrata</option>
-            </select>
-            <select id="categoria">
-              <option value="Cibo">Cibo & Spesa</option>
-              <option value="Trasporti">Trasporti & Auto</option>
-              <option value="Casa">Casa & Bollette</option>
-              <option value="Svago">Svago & Intrattenimento</option>
-              <option value="Lavoro">Lavoro & Stipendio</option>
-              <option value="Altro">Altro</option>
-            </select>
-          </div>
-          <button type="submit">Aggiungi Movimento</button>
+          <select id="tipo">
+            <option value="uscita">Uscita</option>
+            <option value="entrata">Entrata</option>
+          </select>
+
+          <!-- Categorie dinamiche -->
+          <select id="categoria"></select>
+
+          <button type="submit">Salva Movimento</button>
         </form>
       </div>
+    </div>
 
-      <!-- TAB 2: Storico Movimenti -->
-      <div id="tab-storico" class="tab-content">
-        <div class="filter-container">
-          <label for="month-filter">📅 Periodo:</label>
-          <select id="month-filter" onchange="applyFilter()">
-            <option value="all">Tutti i movimenti</option>
+    <!-- TAB 2: STORICO MOVIMENTI -->
+    <div id="tab-storico" class="tab-content card hidden">
+      <h3>Storico Transazioni</h3>
+      <ul id="list-transactions" class="item-list"></ul>
+    </div>
+
+    <!-- TAB 3: GESTIONE ANAGRAFICHE -->
+    <div id="tab-gestione" class="tab-content hidden">
+      <!-- Gestione Categorie -->
+      <div class="card">
+        <h3>📂 Gestione Categorie</h3>
+        <form id="form-category" style="display: flex; gap: 8px; margin-bottom: 12px;">
+          <input type="text" id="new-cat-name" placeholder="Nome Categoria" required style="flex:2;">
+          <select id="new-cat-type" style="flex:1;">
+            <option value="uscita">Uscita</option>
+            <option value="entrata">Entrata</option>
           </select>
-        </div>
-
-        <div class="dashboard">
-          <div class="card">
-            <h3>Saldo</h3>
-            <p id="hist-total-balance" class="balance">€0.00</p>
-          </div>
-          <div class="card">
-            <h3>Entrate</h3>
-            <p id="hist-total-income" class="income-val">+€0.00</p>
-          </div>
-          <div class="card">
-            <h3>Uscite</h3>
-            <p id="hist-total-expense" class="expense-val">-€0.00</p>
-          </div>
-        </div>
-
-        <div class="transactions">
-          <ul id="tx-list"></ul>
-        </div>
+          <button type="submit" style="width: auto;">+ Aggiungi</button>
+        </form>
+        <ul id="list-categories" class="item-list"></ul>
       </div>
 
-      <!-- TAB 3: Report & Grafici -->
-      <div id="tab-report" class="tab-content">
-        <div class="filter-container">
-          <label for="report-month-filter">📅 Filtra Grafici:</label>
-          <select id="report-month-filter" onchange="renderCharts()">
-            <option value="all">Tutti i periodi</option>
+      <!-- Gestione Clienti / Fornitori -->
+      <div class="card">
+        <h3>👥 Gestione Clienti / Fornitori</h3>
+        <form id="form-entity" style="display: flex; gap: 8px; margin-bottom: 12px;">
+          <input type="text" id="new-entity-name" placeholder="Nome Cliente / Fornitore" required style="flex:2;">
+          <select id="new-entity-type" style="flex:1;">
+            <option value="fornitore">Fornitore</option>
+            <option value="cliente">Cliente</option>
+            <option value="entrambi">Entrambi</option>
           </select>
-        </div>
-
-        <div class="chart-card">
-          <h3>📈 Andamento Mensile (Entrate vs Uscite)</h3>
-          <div class="chart-container">
-            <canvas id="monthlyChart"></canvas>
-          </div>
-        </div>
-
-        <div class="chart-card">
-          <h3>🍕 Ripartizione Spese per Categoria</h3>
-          <div class="chart-container">
-            <canvas id="categoryChart"></canvas>
-          </div>
-        </div>
-
-        <div class="chart-card">
-          <h3>🏢 Totale Spese per Fornitore (Decrescente)</h3>
-          <div class="chart-container-tall">
-            <canvas id="supplierChart"></canvas>
-          </div>
-        </div>
+          <button type="submit" style="width: auto;">+ Aggiungi</button>
+        </form>
+        <ul id="list-entities" class="item-list"></ul>
       </div>
-
     </div>
 
   </div>
 
-  <script>
-    const SUPABASE_URL = 'https://owqspxfgueqzivrwvupp.supabase.co';
-    const SUPABASE_ANON_KEY = 'sb_publishable_HEp-x3FM0m_Ym8h7O1etFw_0ZojwUk7';
 
+  <!-- ================= SCRIPT JAVASCRIPT ================= -->
+  <script>
+    // 1. CONFIGURAZIONE SUPABASE
+    const SUPABASE_URL = 'YOUR_SUPABASE_URL'; // Sostituisci con il tuo URL
+    const SUPABASE_ANON_KEY = 'YOUR_SUPABASE_ANON_KEY'; // Sostituisci con la tua chiave
     const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
-    let transazioni = [];
-    let transazioniFiltrate = [];
+    // Variabili di Stato
     let currentUser = null;
+    let transazioni = [];
+    let categorie = [];
+    let entitaList = [];
+    let isSummaryVisible = false; // Di default i saldi sono nascosti
 
-    let chartMonthly = null;
-    let chartCategory = null;
-    let chartSupplier = null;
+    // Inizializzazione data odierna
+    document.getElementById('data').valueAsDate = new Date();
 
-    const authSection = document.getElementById('auth-section');
-    const appSection = document.getElementById('app-section');
-    const loginFields = document.getElementById('login-fields');
-    const resetFields = document.getElementById('reset-fields');
-    const authTitle = document.getElementById('auth-title');
-
-    const curBalanceEl = document.getElementById('cur-total-balance');
-    const curIncomeEl = document.getElementById('cur-total-income');
-    const curExpenseEl = document.getElementById('cur-total-expense');
-    const currentMonthLabel = document.getElementById('current-month-label');
-
-    const histBalanceEl = document.getElementById('hist-total-balance');
-    const histIncomeEl = document.getElementById('hist-total-income');
-    const histExpenseEl = document.getElementById('hist-total-expense');
-
-    const listEl = document.getElementById('tx-list');
-    const formEl = document.getElementById('tx-form');
-    const dateInput = document.getElementById('data');
-    const filterSelect = document.getElementById('month-filter');
-    const reportFilterSelect = document.getElementById('report-month-filter');
-    const entitaDatalist = document.getElementById('entita-list');
-
-    const nomiMesi = ['Gennaio', 'Febbraio', 'Marzo', 'Aprile', 'Maggio', 'Giugno', 'Luglio', 'Agosto', 'Settembre', 'Ottobre', 'Novembre', 'Dicembre'];
-    dateInput.valueAsDate = new Date();
-
-    /* --- GESTIONE AUTENTICAZIONE SUPABASE --- */
-    supabaseClient.auth.onAuthStateChange((event, session) => {
+    // Controlla la sessione all'avvio
+    supabaseClient.auth.getSession().then(({ data: { session } }) => {
       if (session) {
-        currentUser = session.user;
-        authSection.classList.add('hidden');
-        appSection.classList.remove('hidden');
-        fetchTransazioni();
-      } else {
-        currentUser = null;
-        authSection.classList.remove('hidden');
-        appSection.classList.add('hidden');
+        onLoginSuccess(session.user);
       }
     });
 
-    function showResetView() {
-      loginFields.classList.add('hidden');
-      resetFields.classList.remove('hidden');
-      authTitle.innerText = "Recupero Password";
-    }
+    supabaseClient.auth.onAuthStateChange((_event, session) => {
+      if (session) {
+        onLoginSuccess(session.user);
+      } else {
+        onLogoutSuccess();
+      }
+    });
 
-    function showLoginView() {
-      resetFields.classList.add('hidden');
-      loginFields.classList.remove('hidden');
-      authTitle.innerText = "Accedi o Registrati";
+    // ================= GESTIONE AUTH =================
+    async function login() {
+      const email = document.getElementById('auth-email').value;
+      const password = document.getElementById('auth-password').value;
+      const { error } = await supabaseClient.auth.signInWithPassword({ email, password });
+      if (error) alert('Errore login: ' + error.message);
     }
 
     async function signUp() {
-      const email = document.getElementById('auth-email').value.trim();
-      const password = document.getElementById('auth-password').value.trim();
-      if (!email || !password) return alert('Inserisci email e password');
+      const email = document.getElementById('auth-email').value;
+      const password = document.getElementById('auth-password').value;
       const { error } = await supabaseClient.auth.signUp({ email, password });
       if (error) alert('Errore registrazione: ' + error.message);
-      else alert('Registrazione effettuata! Controlla la tua email per confermare l\'account.');
+      else alert('Registrazione effettuata! Controlla la mail per la conferma.');
     }
-
-    async function login() {
-      const email = document.getElementById('auth-email').value.trim();
-      const password = document.getElementById('auth-password').value.trim();
-      if (!email || !password) return alert('Inserisci email e password');
-      const { error } = await supabaseClient.auth.signInWithPassword({ email, password });
-      if (error) alert('Errore di accesso: ' + error.message);
-    }
-
-async function resetPassword() {
-  const email = document.getElementById('reset-email').value.trim();
-  if (!email) return alert('Inserisci l\'indirizzo email');
-  
-  const { error } = await supabaseClient.auth.resetPasswordForEmail(email, {
-    redirectTo: 'https://gestione-spese-beta.vercel.app'
-  });
-
-  if (error) {
-    alert('Errore: ' + error.message);
-  } else {
-    alert('Email di ripristino inviata! Controlla la tua casella di posta.');
-    showLoginView();
-  }
-}
-
 
     async function logout() {
       await supabaseClient.auth.signOut();
     }
 
-    /* --- LOGICA APPLICAZIONE --- */
-    function getCurrentYearMonth() {
-      const now = new Date();
-      const year = now.getFullYear();
-      const month = String(now.getMonth() + 1).padStart(2, '0');
-      return `${year}-${month}`;
+    async function resetPassword() {
+      const email = document.getElementById('reset-email').value.trim();
+      if (!email) return alert('Inserisci l\'indirizzo email');
+      
+      const { error } = await supabaseClient.auth.resetPasswordForEmail(email);
+
+      if (error) {
+        alert('Errore: ' + error.message);
+      } else {
+        alert('Email di ripristino inviata! Controlla la tua casella di posta.');
+        showLoginView();
+      }
     }
 
+    function showResetView() {
+      document.getElementById('login-fields').classList.add('hidden');
+      document.getElementById('reset-fields').classList.remove('hidden');
+      document.getElementById('auth-title').innerText = "Recupero Password";
+    }
+
+    function showLoginView() {
+      document.getElementById('reset-fields').classList.add('hidden');
+      document.getElementById('login-fields').classList.remove('hidden');
+      document.getElementById('auth-title').innerText = "Accedi";
+    }
+
+    async function onLoginSuccess(user) {
+      currentUser = user;
+      document.getElementById('auth-section').classList.add('hidden');
+      document.getElementById('app-section').classList.remove('hidden');
+      await loadMasterData();
+      await loadTransactions();
+    }
+
+    function onLogoutSuccess() {
+      currentUser = null;
+      transazioni = [];
+      categorie = [];
+      entitaList = [];
+      isSummaryVisible = false;
+      document.getElementById('auth-section').classList.remove('hidden');
+      document.getElementById('app-section').classList.add('hidden');
+    }
+
+    // ================= GESTIONE TAB NAVIGAZIONE =================
     function switchTab(tabId) {
-      document.querySelectorAll('.tab-content').forEach(tab => tab.classList.remove('active'));
-      document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
+      document.querySelectorAll('.tab-content').forEach(el => el.classList.add('hidden'));
+      document.querySelectorAll('.tab-btn').forEach(el => el.classList.remove('active'));
+      
+      document.getElementById(tabId).classList.remove('hidden');
+      event.target.classList.add('active');
+    }
 
-      document.getElementById(tabId).classList.add('active');
+    // ================= GESTIONE VISIBILITÀ RIEPILOGO =================
+    function toggleSummaryVisibility() {
+      isSummaryVisible = !isSummaryVisible;
+      const btn = document.getElementById('btn-toggle-visibility');
+      if (isSummaryVisible) {
+        btn.innerText = '🙈 Nascondi';
+      } else {
+        btn.innerText = '👁️ Mostra';
+      }
+      updateDashboard();
+    }
 
-      const tabs = ['tab-inserimento', 'tab-storico', 'tab-report'];
-      const activeIdx = tabs.indexOf(tabId);
-      if (activeIdx !== -1) {
-        document.querySelectorAll('.tab-btn')[activeIdx].classList.add('active');
+    // ================= CARICAMENTO ANAGRAFICHE (CATEGORIE & ENTITÀ) =================
+    async function loadMasterData() {
+      if (!currentUser) return;
+
+      // Carica Categorie
+      const { data: catData, error: catErr } = await supabaseClient
+        .from('categories')
+        .select('*')
+        .order('name');
+      if (!catErr) categorie = catData || [];
+
+      // Carica Entità (Clienti/Fornitori)
+      const { data: entData, error: entErr } = await supabaseClient
+        .from('entities')
+        .select('*')
+        .order('name');
+      if (!entErr) entitaList = entData || [];
+
+      renderMasterDataLists();
+      populateDropdowns();
+    }
+
+    function renderMasterDataLists() {
+      // Render Categorie
+      const catListEl = document.getElementById('list-categories');
+      catListEl.innerHTML = categorie.map(c => `
+        <li>
+          <span><strong>${c.name}</strong> <small>(${c.type})</small></span>
+          <button onclick="deleteCategory(${c.id})" class="btn-danger" style="width:auto; padding: 4px 8px;">❌</button>
+        </li>
+      `).join('');
+
+      // Render Entità
+      const entListEl = document.getElementById('list-entities');
+      entListEl.innerHTML = entitaList.map(e => `
+        <li>
+          <span><strong>${e.name}</strong> <small>(${e.type})</small></span>
+          <button onclick="deleteEntity(${e.id})" class="btn-danger" style="width:auto; padding: 4px 8px;">❌</button>
+        </li>
+      `).join('');
+    }
+
+    function populateDropdowns() {
+      // Popola select Categoria
+      const catSelect = document.getElementById('categoria');
+      if (categorie.length === 0) {
+        catSelect.innerHTML = '<option value="">Nessuna categoria (aggiungila in Gestione)</option>';
+      } else {
+        catSelect.innerHTML = categorie.map(c => `<option value="${c.name}">${c.name} (${c.type})</option>`).join('');
       }
 
-      if (tabId === 'tab-report') {
-        renderCharts();
+      // Popola datalist Entità
+      const datalist = document.getElementById('entita-datalist');
+      datalist.innerHTML = entitaList.map(e => `<option value="${e.name}">`).join('');
+    }
+
+    // Salvataggio Nuova Categoria
+    document.getElementById('form-category').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const name = document.getElementById('new-cat-name').value.trim();
+      const type = document.getElementById('new-cat-type').value;
+
+      if (!name) return;
+
+      const { data, error } = await supabaseClient
+        .from('categories')
+        .insert([{ name, type, user_id: currentUser.id }])
+        .select();
+
+      if (error) {
+        alert('Errore aggiunta categoria: ' + error.message);
+      } else {
+        categorie.push(data[0]);
+        renderMasterDataLists();
+        populateDropdowns();
+        document.getElementById('new-cat-name').value = '';
+      }
+    });
+
+    // Salvataggio Nuova Entità
+    document.getElementById('form-entity').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const name = document.getElementById('new-entity-name').value.trim();
+      const type = document.getElementById('new-entity-type').value;
+
+      if (!name) return;
+
+      const { data, error } = await supabaseClient
+        .from('entities')
+        .insert([{ name, type, user_id: currentUser.id }])
+        .select();
+
+      if (error) {
+        alert('Errore aggiunta entità: ' + error.message);
+      } else {
+        entitaList.push(data[0]);
+        renderMasterDataLists();
+        populateDropdowns();
+        document.getElementById('new-entity-name').value = '';
+      }
+    });
+
+    // Eliminazione Categoria ed Entità
+    async function deleteCategory(id) {
+      if (!confirm('Eliminare questa categoria?')) return;
+      const { error } = await supabaseClient.from('categories').delete().eq('id', id);
+      if (!error) {
+        categorie = categorie.filter(c => c.id !== id);
+        renderMasterDataLists();
+        populateDropdowns();
+      } else {
+        alert('Errore: ' + error.message);
       }
     }
 
-    async function fetchTransazioni() {
+    async function deleteEntity(id) {
+      if (!confirm('Eliminare questo cliente/fornitore?')) return;
+      const { error } = await supabaseClient.from('entities').delete().eq('id', id);
+      if (!error) {
+        entitaList = entitaList.filter(e => e.id !== id);
+        renderMasterDataLists();
+        populateDropdowns();
+      } else {
+        alert('Errore: ' + error.message);
+      }
+    }
+
+
+    // ================= GESTIONE TRANSAZIONI =================
+    async function loadTransactions() {
       const { data, error } = await supabaseClient
         .from('transactions')
         .select('*')
         .order('data', { ascending: false });
 
       if (error) {
-        console.error('Errore recupero transazioni:', error);
+        console.error('Errore caricamento transazioni:', error);
         return;
       }
 
       transazioni = data || [];
-      updateEntitaDatalist();
-      populateMonthFilter();
-      applyFilter();
-      updateCurrentMonthDashboard();
+      renderTransactions();
+      updateDashboard();
     }
 
-    function updateCurrentMonthDashboard() {
-      const now = new Date();
-      const currentYear = now.getFullYear();
-      const currentMonth = String(now.getMonth() + 1).padStart(2, '0');
-      const currentKey = `${currentYear}-${currentMonth}`;
-
-      currentMonthLabel.innerText = `Riepilogo (${nomiMesi[now.getMonth()]} ${currentYear})`;
-
-      const tMese = transazioni.filter(t => t.data && t.data.startsWith(currentKey));
-
-      const total = tMese.reduce((acc, t) => acc + (t.tipo === 'entrata' ? parseFloat(t.importo) : -parseFloat(t.importo)), 0).toFixed(2);
-      const income = tMese.filter(t => t.tipo === 'entrata').reduce((acc, t) => acc + parseFloat(t.importo), 0).toFixed(2);
-      const expense = tMese.filter(t => t.tipo === 'uscita').reduce((acc, t) => acc + parseFloat(t.importo), 0).toFixed(2);
-
-      curBalanceEl.innerText = `€${total}`;
-      curIncomeEl.innerText = `+€${income}`;
-      curExpenseEl.innerText = `-€${expense}`;
-    }
-
-    function updateEntitaDatalist() {
-      entitaDatalist.innerHTML = '';
-      const entitaUniche = new Set();
-
-      transazioni.forEach(t => {
-        if (t.entita && t.entita.trim() !== '') {
-          entitaUniche.add(t.entita.trim());
-        }
-      });
-
-      Array.from(entitaUniche).sort().forEach(entita => {
-        const option = document.createElement('option');
-        option.value = entita;
-        entitaDatalist.appendChild(option);
-      });
-    }
-
-    function populateMonthFilter() {
-      const currentSelectionStorico = filterSelect.value;
-      const currentSelectionReport = reportFilterSelect.value;
-
-      filterSelect.innerHTML = '<option value="all">Tutti i movimenti</option>';
-      reportFilterSelect.innerHTML = '<option value="all">Tutti i periodi</option>';
-
-      const periodiSet = new Set();
-      transazioni.forEach(t => {
-        if (t.data) {
-          const [year, month] = t.data.split('-');
-          periodiSet.add(`${year}-${month}`);
-        }
-      });
-
-      Array.from(periodiSet).sort().reverse().forEach(periodo => {
-        const [year, month] = periodo.split('-');
-        const optionText = `${nomiMesi[parseInt(month, 10) - 1]} ${year}`;
-        
-        const optStorico = document.createElement('option');
-        optStorico.value = periodo;
-        optStorico.textContent = optionText;
-        filterSelect.appendChild(optStorico);
-
-        const optReport = document.createElement('option');
-        optReport.value = periodo;
-        optReport.textContent = optionText;
-        reportFilterSelect.appendChild(optReport);
-      });
-
-      if (Array.from(filterSelect.options).some(opt => opt.value === currentSelectionStorico)) {
-        filterSelect.value = currentSelectionStorico;
-      }
-
-      const currentYM = getCurrentYearMonth();
-      if (currentSelectionReport && Array.from(reportFilterSelect.options).some(opt => opt.value === currentSelectionReport)) {
-        reportFilterSelect.value = currentSelectionReport;
-      } else if (Array.from(reportFilterSelect.options).some(opt => opt.value === currentYM)) {
-        reportFilterSelect.value = currentYM;
-      }
-    }
-
-    function applyFilter() {
-      const selected = filterSelect.value;
-      transazioniFiltrate = selected === 'all' 
-        ? [...transazioni] 
-        : transazioni.filter(t => t.data && t.data.startsWith(selected));
-      renderUI();
-    }
-
-    function updateHistoryValues() {
-      const total = transazioniFiltrate.reduce((acc, t) => acc + (t.tipo === 'entrata' ? parseFloat(t.importo) : -parseFloat(t.importo)), 0).toFixed(2);
-      const income = transazioniFiltrate.filter(t => t.tipo === 'entrata').reduce((acc, t) => acc + parseFloat(t.importo), 0).toFixed(2);
-      const expense = transazioniFiltrate.filter(t => t.tipo === 'uscita').reduce((acc, t) => acc + parseFloat(t.importo), 0).toFixed(2);
-
-      histBalanceEl.innerText = `€${total}`;
-      histIncomeEl.innerText = `+€${income}`;
-      histExpenseEl.innerText = `-€${expense}`;
-    }
-
-    function formatDate(dateString) {
-      if (!dateString) return '';
-      const [year, month, day] = dateString.split('-');
-      return `${day}/${month}/${year}`;
-    }
-
-    function renderUI() {
-      listEl.innerHTML = '';
-      if (transazioniFiltrate.length === 0) {
-        listEl.innerHTML = '<p class="empty-msg">Nessuna transazione presente.</p>';
-      } else {
-        transazioniFiltrate.forEach(t => {
-          const isIncome = t.tipo === 'entrata';
-          const entitaText = t.entita ? ` • 👤 ${t.entita}` : '';
-          const categoriaVal = t.category || t.categoria || 'Generale';
-
-          const li = document.createElement('li');
-          li.innerHTML = `
-            <div class="tx-info">
-              <span class="tx-title">${t.descrizione}</span>
-              <div class="tx-details">
-                <span>📅 ${formatDate(t.data)}</span>
-                <span>• ${categoriaVal}</span>
-                ${entitaText ? `<span>${entitaText}</span>` : ''}
-              </div>
-            </div>
-            <div class="tx-amount ${isIncome ? 'plus' : 'minus'}">
-              ${isIncome ? '+' : '-'}€${parseFloat(t.importo).toFixed(2)}
-              <button class="delete-btn" onclick="removeTransaction('${t.id}')">&times;</button>
-            </div>
-          `;
-          listEl.appendChild(li);
-        });
-      }
-      updateHistoryValues();
-    }
-
-    /* --- GENERAZIONE GRAFICI --- */
-    function renderCharts() {
-      if (!transazioni || transazioni.length === 0) return;
-
-      let selectedPeriod = reportFilterSelect.value;
-
-      if (!selectedPeriod || selectedPeriod === '') {
-        const currentYM = getCurrentYearMonth();
-        if (Array.from(reportFilterSelect.options).some(opt => opt.value === currentYM)) {
-          reportFilterSelect.value = currentYM;
-          selectedPeriod = currentYM;
-        } else {
-          selectedPeriod = 'all';
-        }
-      }
-
-      const txReport = selectedPeriod === 'all' 
-        ? transazioni 
-        : transazioni.filter(t => t.data && t.data.startsWith(selectedPeriod));
-
-      if (chartMonthly) chartMonthly.destroy();
-      if (chartCategory) chartCategory.destroy();
-      if (chartSupplier) chartSupplier.destroy();
-
-      const mensili = {};
-      txReport.forEach(t => {
-        if (!t.data) return;
-        const key = t.data.substring(0, 7);
-        if (!mensili[key]) mensili[key] = { entrate: 0, uscite: 0 };
-        if (t.tipo === 'entrata') mensili[key].entrate += parseFloat(t.importo);
-        else mensili[key].uscite += parseFloat(t.importo);
-      });
-
-      const mesiSorted = Object.keys(mensili).sort();
-      const labelsMesi = mesiSorted.map(m => {
-        const [y, mo] = m.split('-');
-        return `${nomiMesi[parseInt(mo, 10) - 1]} ${y.substring(2)}`;
-      });
-
-      chartMonthly = new Chart(document.getElementById('monthlyChart'), {
-        type: 'bar',
-        data: {
-          labels: labelsMesi,
-          datasets: [
-            {
-              label: 'Entrate (€)',
-              data: mesiSorted.map(m => mensili[m].entrate),
-              backgroundColor: '#2ecc71'
-            },
-            {
-              label: 'Uscite (€)',
-              data: mesiSorted.map(m => mensili[m].uscite),
-              backgroundColor: '#e74c3c'
-            }
-          ]
-        },
-        options: { responsive: true, maintainAspectRatio: false }
-      });
-
-      const categorieSpesa = {};
-      txReport.filter(t => t.tipo === 'uscita').forEach(t => {
-        const cat = t.category || t.categoria || 'Altro';
-        categorieSpesa[cat] = (categorieSpesa[cat] || 0) + parseFloat(t.importo);
-      });
-
-      chartCategory = new Chart(document.getElementById('categoryChart'), {
-        type: 'doughnut',
-        data: {
-          labels: Object.keys(categorieSpesa),
-          datasets: [{
-            data: Object.values(categorieSpesa),
-            backgroundColor: ['#4a90e2', '#e67e22', '#f1c40f', '#9b59b6', '#1abc9c', '#e74c3c']
-          }]
-        },
-        options: { responsive: true, maintainAspectRatio: false }
-      });
-
-      const speseFornitore = {};
-      txReport.filter(t => t.tipo === 'uscita').forEach(t => {
-        const fornitore = (t.entita && t.entita.trim() !== '') ? t.entita.trim() : 'Non Specificato';
-        speseFornitore[fornitore] = (speseFornitore[fornitore] || 0) + parseFloat(t.importo);
-      });
-
-      const fornitoriSorted = Object.entries(speseFornitore).sort((a, b) => b[1] - a[1]);
-
-      chartSupplier = new Chart(document.getElementById('supplierChart'), {
-        type: 'bar',
-        data: {
-          labels: fornitoriSorted.map(item => item[0]),
-          datasets: [{
-            label: 'Totale Speso (€)',
-            data: fornitoriSorted.map(item => item[1]),
-            backgroundColor: '#3498db'
-          }]
-        },
-        options: {
-          indexAxis: 'y',
-          responsive: true,
-          maintainAspectRatio: false,
-          scales: {
-            x: {
-              beginAtZero: true,
-              ticks: {
-                stepSize: 50,
-                callback: function(value) { return '€' + value; }
-              }
-            }
-          }
-        }
-      });
-    }
-
-    formEl.addEventListener('submit', async (e) => {
+    document.getElementById('form-transaction').addEventListener('submit', async (e) => {
       e.preventDefault();
       const descrizione = document.getElementById('descrizione').value.trim();
-      const entita = document.getElementById('entita').value.trim();
       const importo = parseFloat(document.getElementById('importo').value);
-      const dataVal = dateInput.value;
+      const dataVal = document.getElementById('data').value;
+      const entita = document.getElementById('entita').value.trim();
       const tipo = document.getElementById('tipo').value;
       const categoria = document.getElementById('categoria').value;
 
-      if (!descrizione || isNaN(importo) || !dataVal) return;
+      if (!descrizione || isNaN(importo) || !dataVal) {
+        alert('Compila tutti i campi obbligatori');
+        return;
+      }
 
       const nuovaTx = { 
         descrizione, 
@@ -655,7 +472,7 @@ async function resetPassword() {
         data: dataVal, 
         tipo, 
         categoria: categoria,
-        user_id: currentUser ? currentUser.id : null
+        user_id: currentUser.id
       };
 
       const { data, error } = await supabaseClient
@@ -669,30 +486,55 @@ async function resetPassword() {
       }
 
       transazioni.unshift(data[0]);
-      updateEntitaDatalist();
-      populateMonthFilter();
-      applyFilter();
-      updateCurrentMonthDashboard();
-      formEl.reset();
-      dateInput.valueAsDate = new Date();
+      renderTransactions();
+      updateDashboard();
+      
+      document.getElementById('form-transaction').reset();
+      document.getElementById('data').valueAsDate = new Date();
+      alert('Movimento salvato con successo!');
     });
 
-    window.removeTransaction = async function(id) {
-      const { error } = await supabaseClient
-        .from('transactions')
-        .delete()
-        .eq('id', id);
+    function renderTransactions() {
+      const listEl = document.getElementById('list-transactions');
+      listEl.innerHTML = transazioni.map(t => `
+        <li>
+          <div>
+            <strong>${t.descrizione}</strong> <small style="color:#666;">(${t.categoria || 'Generale'})</small><br>
+            <small style="color:#888;">${t.data} ${t.entita ? '| ' + t.entita : ''}</small>
+          </div>
+          <div style="font-weight:bold; color: ${t.tipo === 'entrata' ? '#34c759' : '#ff3b30'};">
+            ${t.tipo === 'entrata' ? '+' : '-'}€${parseFloat(t.importo).toFixed(2)}
+          </div>
+        </li>
+      `).join('');
+    }
 
-      if (error) {
-        alert('Errore eliminazione: ' + error.message);
-        return;
+    function updateDashboard() {
+      let entrate = 0;
+      let uscite = 0;
+
+      transazioni.forEach(t => {
+        const val = parseFloat(t.importo) || 0;
+        if (t.tipo === 'entrata') entrate += val;
+        else uscite += val;
+      });
+
+      const saldo = entrate - uscite;
+
+      const saldoEl = document.getElementById('summary-saldo');
+      const entrateEl = document.getElementById('summary-entrate');
+      const usciteEl = document.getElementById('summary-uscite');
+
+      if (isSummaryVisible) {
+        saldoEl.innerText = `€${saldo.toFixed(2)}`;
+        entrateEl.innerText = `+€${entrate.toFixed(2)}`;
+        usciteEl.innerText = `-€${uscite.toFixed(2)}`;
+      } else {
+        saldoEl.innerText = '••••••';
+        entrateEl.innerText = '••••••';
+        usciteEl.innerText = '••••••';
       }
-      transazioni = transazioni.filter(t => t.id !== id);
-      updateEntitaDatalist();
-      populateMonthFilter();
-      applyFilter();
-      updateCurrentMonthDashboard();
-    };
+    }
   </script>
 </body>
 </html>
