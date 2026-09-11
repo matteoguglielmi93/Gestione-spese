@@ -5,6 +5,8 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Gestione Spese Personali</title>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <!-- Chart.js per i Grafici -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <style>
     * { box-sizing: border-box; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
     body { background-color: #f4f6f9; margin: 0; padding: 16px; color: #333; }
@@ -50,6 +52,9 @@
     .item-list { list-style: none; padding: 0; margin: 0; }
     .item-list li { display: flex; justify-content: space-between; align-items: center; padding: 10px 0; border-bottom: 1px solid #eee; }
     .item-list li:last-child { border-bottom: none; }
+
+    /* Contenitori Grafici */
+    .chart-container { position: relative; width: 100%; max-height: 350px; margin-top: 12px; }
   </style>
 </head>
 <body>
@@ -59,7 +64,6 @@
     <div class="card">
       <h2 id="auth-title" style="text-align:center;">Accedi</h2>
       
-      <!-- Login & Registrazione -->
       <div id="login-fields">
         <input type="email" id="auth-email" placeholder="Email" required>
         <input type="password" id="auth-password" placeholder="Password" required>
@@ -72,7 +76,6 @@
         </div>
       </div>
 
-      <!-- Recupero Password -->
       <div id="reset-fields" class="hidden">
         <p style="font-size: 0.85rem; color: #666;">Inserisci la tua email per ricevere il link di ripristino.</p>
         <input type="email" id="reset-email" placeholder="Email">
@@ -83,7 +86,6 @@
       </div>
     </div>
   </div>
-
 
   <!-- ================= VISTA APP PRINCIPALE ================= -->
   <div id="app-section" class="hidden">
@@ -100,10 +102,8 @@
       <button class="tab-btn" onclick="switchTab('tab-gestione')">⚙️ Gestione</button>
     </div>
 
-    <!-- TAB 1: NUOVO MOVIMENTO & RIEPILOGO -->
+    <!-- TAB 1: NUOVO MOVIMENTO -->
     <div id="tab-nuovo" class="tab-content">
-      
-      <!-- Riepilogo con pulsante mostra/nascondi -->
       <div style="margin-bottom: 8px;">
         <div class="summary-header">
           <span style="font-weight: bold; font-size: 0.9rem; color: #666;">Riepilogo Totale</span>
@@ -132,7 +132,6 @@
           <input type="number" step="0.01" id="importo" placeholder="Importo (€)" required>
           <input type="date" id="data" required>
           
-          <!-- Cliente / Fornitore (Finestra a tendina popolata da DB) -->
           <select id="entita">
             <option value="">-- Caricamento Clienti/Fornitori... --</option>
           </select>
@@ -142,7 +141,6 @@
             <option value="entrata">Entrata</option>
           </select>
 
-          <!-- Categorie dinamiche -->
           <select id="categoria"></select>
 
           <button type="submit">Salva Movimento</button>
@@ -156,16 +154,22 @@
       <ul id="list-transactions" class="item-list"></ul>
     </div>
 
-    <!-- TAB 3: REPORT & STATISTICHE -->
+    <!-- TAB 3: REPORT & GRAFICI -->
     <div id="tab-report" class="tab-content hidden">
+      <!-- GRAFICO 1: TORTA (CATEGORIE) -->
       <div class="card">
-        <h3>📊 Totali per Categoria</h3>
-        <ul id="report-categories" class="item-list"></ul>
+        <h3>🍕 Spese per Categoria</h3>
+        <div class="chart-container">
+          <canvas id="chart-categories"></canvas>
+        </div>
       </div>
 
+      <!-- GRAFICO 2: BARRE (CLIENTI / FORNITORI) -->
       <div class="card">
-        <h3>👤 Totali per Cliente / Fornitore</h3>
-        <ul id="report-entities" class="item-list"></ul>
+        <h3>📊 Totali per Cliente / Fornitore</h3>
+        <div class="chart-container">
+          <canvas id="chart-entities"></canvas>
+        </div>
       </div>
     </div>
 
@@ -187,17 +191,14 @@
 
   </div>
 
-
   <!-- ================= SCRIPT JAVASCRIPT ================= -->
   <script>
-    // 1. CONFIGURAZIONE SUPABASE (Sostituisci con le tue chiavi reali)
     const SUPABASE_URL = 'https://owqspxfgueqzivrwvupp.supabase.co'; // Sostituisci con il tuo URL
-    const SUPABASE_ANON_KEY = 'sb_publishable_HEp-x3FM0m_Ym8h7O1etFw_0ZojwUk7'; // Sostituisci con la tua chiave
+    const SUPABASE_ANON_KEY = 'sb_publishable_HEp-x3FM0m_Ym8h7O1etFw_0ZojwUk7'; // Sostituisci con la tua chiave 
 
     const supabaseProvider = window.supabase || supabase;
     const supabaseClient = supabaseProvider.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
-    // Categorie predefinite fisse
     const defaultCategories = [
       { id: 'def-1', name: 'Casa & Utenze', type: 'uscita' },
       { id: 'def-2', name: 'Spesa & Cibo', type: 'uscita' },
@@ -210,79 +211,55 @@
       { id: 'def-9', name: 'Altro', type: 'uscita' }
     ];
 
-    // Variabili di Stato
     let currentUser = null;
     let transazioni = [];
     let categorie = [...defaultCategories];
     let entitaList = [];
     let isSummaryVisible = false;
 
-    // Inizializzazione data odierna
+    // Istanze Grafici Chart.js
+    let categoriesChartInstance = null;
+    let entitiesChartInstance = null;
+
     document.getElementById('data').valueAsDate = new Date();
 
-    // Controlla la sessione all'avvio
     supabaseClient.auth.getSession().then(({ data: { session } }) => {
-      if (session) {
-        onLoginSuccess(session.user);
-      }
+      if (session) onLoginSuccess(session.user);
     });
 
     supabaseClient.auth.onAuthStateChange((_event, session) => {
-      if (session) {
-        onLoginSuccess(session.user);
-      } else {
-        onLogoutSuccess();
-      }
+      if (session) onLoginSuccess(session.user);
+      else onLogoutSuccess();
     });
 
-    // ================= GESTIONE AUTH =================
     async function login() {
       const email = document.getElementById('auth-email').value.trim();
       const password = document.getElementById('auth-password').value;
-
-      if (!email || !password) {
-        alert('Inserisci email e password');
-        return;
-      }
+      if (!email || !password) return alert('Inserisci email e password');
 
       const { data, error } = await supabaseClient.auth.signInWithPassword({ email, password });
-      if (error) {
-        alert('Errore login: ' + error.message);
-      } else if (data.user) {
-        onLoginSuccess(data.user);
-      }
+      if (error) alert('Errore login: ' + error.message);
+      else if (data.user) onLoginSuccess(data.user);
     }
 
     async function signUp() {
       const email = document.getElementById('auth-email').value.trim();
       const password = document.getElementById('auth-password').value;
-
-      if (!email || !password) {
-        alert('Inserisci email e password');
-        return;
-      }
+      if (!email || !password) return alert('Inserisci email e password');
 
       const { error } = await supabaseClient.auth.signUp({ email, password });
       if (error) alert('Errore registrazione: ' + error.message);
       else alert('Registrazione effettuata! Controlla la mail per la conferma.');
     }
 
-    async function logout() {
-      await supabaseClient.auth.signOut();
-    }
+    async function logout() { await supabaseClient.auth.signOut(); }
 
     async function resetPassword() {
       const email = document.getElementById('reset-email').value.trim();
       if (!email) return alert('Inserisci l\'indirizzo email');
-      
       const { error } = await supabaseClient.auth.resetPasswordForEmail(email);
-
-      if (error) {
-        alert('Errore: ' + error.message);
-      } else {
-        alert('Email di ripristino inviata! Controlla la tua casella di posta.');
-        showLoginView();
-      }
+      if (error) alert('Errore: ' + error.message);
+      else { alert('Email di ripristino inviata!'); showLoginView(); }
     }
 
     function showResetView() {
@@ -315,7 +292,6 @@
       document.getElementById('app-section').classList.add('hidden');
     }
 
-    // ================= GESTIONE TAB NAVIGAZIONE =================
     function switchTab(tabId) {
       document.querySelectorAll('.tab-content').forEach(el => el.classList.add('hidden'));
       document.querySelectorAll('.tab-btn').forEach(el => el.classList.remove('active'));
@@ -328,53 +304,51 @@
       }
     }
 
-    // ================= GESTIONE VISIBILITÀ RIEPILOGO =================
     function toggleSummaryVisibility() {
       isSummaryVisible = !isSummaryVisible;
-      const btn = document.getElementById('btn-toggle-visibility');
-      if (isSummaryVisible) {
-        btn.innerText = '🙈 Nascondi';
-      } else {
-        btn.innerText = '👁️ Mostra';
-      }
+      document.getElementById('btn-toggle-visibility').innerText = isSummaryVisible ? '🙈 Nascondi' : '👁️ Mostra';
       updateDashboard();
     }
 
-    // ================= CARICAMENTO ANAGRAFICHE DAL DB =================
     async function loadMasterData() {
       if (!currentUser) return;
 
-      // 1. Carica Categorie dal DB
       const { data: catData, error: catErr } = await supabaseClient
         .from('categories')
         .select('*')
         .order('name');
 
-      if (!catErr && catData && catData.length > 0) {
-        categorie = [...defaultCategories, ...catData];
-      } else {
-        categorie = [...defaultCategories];
-      }
+      categorie = (!catErr && catData && catData.length > 0) ? [...defaultCategories, ...catData] : [...defaultCategories];
 
-      // 2. Carica TUTTI i Clienti / Fornitori inseriti sul DB
-      const { data: entData, error: entErr } = await supabaseClient
+      let { data: entData, error: entErr } = await supabaseClient
         .from('entities')
         .select('*')
         .order('name');
 
-      if (entErr) {
-        console.error('Errore durante il recupero dei clienti/fornitori:', entErr.message);
-      } else {
-        entitaList = entData || [];
+      // Se la tabella 'entities' è vuota, recupera dai vecchi movimenti 'transactions'
+      if (!entErr && (!entData || entData.length === 0)) {
+        const { data: txData } = await supabaseClient
+          .from('transactions')
+          .select('entita')
+          .not('entita', 'is', null);
+
+        if (txData && txData.length > 0) {
+          const nomiUnici = [...new Set(txData.map(t => t.entita ? t.entita.trim() : '').filter(nome => nome !== ''))];
+          if (nomiUnici.length > 0) {
+            const nuoveEntita = nomiUnici.map(nome => ({ name: nome, user_id: currentUser.id }));
+            const { data: insertedData } = await supabaseClient.from('entities').insert(nuoveEntita).select();
+            if (insertedData) entData = insertedData;
+          }
+        }
       }
 
+      entitaList = entData || [];
       renderMasterDataLists();
       populateDropdowns();
     }
 
     function renderMasterDataLists() {
-      const catListEl = document.getElementById('list-categories');
-      catListEl.innerHTML = categorie.map(c => `
+      document.getElementById('list-categories').innerHTML = categorie.map(c => `
         <li>
           <span><strong>${c.name}</strong> <small>(${c.type})</small></span>
           ${String(c.id).startsWith('def-') ? '<small style="color:#999;">(Predefinita)</small>' : `<button onclick="deleteCategory(${c.id})" class="btn-danger" style="width:auto; padding: 4px 8px;">❌</button>`}
@@ -383,42 +357,26 @@
     }
 
     function populateDropdowns() {
-      // Popola Dropdown Categorie
       const catSelect = document.getElementById('categoria');
-      if (catSelect) {
-        catSelect.innerHTML = categorie
-          .map(c => `<option value="${c.name}">${c.name} (${c.type})</option>`)
-          .join('');
-      }
+      if (catSelect) catSelect.innerHTML = categorie.map(c => `<option value="${c.name}">${c.name} (${c.type})</option>`).join('');
 
-      // Popola Dropdown Clienti / Fornitori da DB
       const entSelect = document.getElementById('entita');
       if (entSelect) {
-        if (entitaList.length === 0) {
-          entSelect.innerHTML = `<option value="">-- Nessun Cliente/Fornitore trovato --</option>`;
-        } else {
-          entSelect.innerHTML = `<option value="">-- Nessun Cliente/Fornitore --</option>` + 
-            entitaList.map(e => `<option value="${e.name}">${e.name}</option>`).join('');
-        }
+        entSelect.innerHTML = entitaList.length === 0 
+          ? `<option value="">-- Nessun Cliente/Fornitore trovato --</option>`
+          : `<option value="">-- Nessun Cliente/Fornitore --</option>` + entitaList.map(e => `<option value="${e.name}">${e.name}</option>`).join('');
       }
     }
 
-    // Aggiunta Nuova Categoria
     document.getElementById('form-category').addEventListener('submit', async (e) => {
       e.preventDefault();
       const name = document.getElementById('new-cat-name').value.trim();
       const type = document.getElementById('new-cat-type').value;
-
       if (!name) return;
 
-      const { data, error } = await supabaseClient
-        .from('categories')
-        .insert([{ name, type, user_id: currentUser.id }])
-        .select();
-
-      if (error) {
-        alert('Errore aggiunta categoria: ' + error.message);
-      } else {
+      const { data, error } = await supabaseClient.from('categories').insert([{ name, type, user_id: currentUser.id }]).select();
+      if (error) alert('Errore aggiunta categoria: ' + error.message);
+      else {
         categorie.push(data[0]);
         renderMasterDataLists();
         populateDropdowns();
@@ -433,22 +391,12 @@
         categorie = categorie.filter(c => c.id !== id);
         renderMasterDataLists();
         populateDropdowns();
-      } else {
-        alert('Errore: ' + error.message);
-      }
+      } else alert('Errore: ' + error.message);
     }
 
-    // ================= GESTIONE TRANSAZIONI =================
     async function loadTransactions() {
-      const { data, error } = await supabaseClient
-        .from('transactions')
-        .select('*')
-        .order('data', { ascending: false });
-
-      if (error) {
-        console.error('Errore caricamento transazioni:', error);
-        return;
-      }
+      const { data, error } = await supabaseClient.from('transactions').select('*').order('data', { ascending: false });
+      if (error) return console.error('Errore caricamento transazioni:', error);
 
       transazioni = data || [];
       renderTransactions();
@@ -464,43 +412,23 @@
       const tipo = document.getElementById('tipo').value;
       const categoria = document.getElementById('categoria').value;
 
-      if (!descrizione || isNaN(importo) || !dataVal) {
-        alert('Compila tutti i campi obbligatori');
-        return;
-      }
+      if (!descrizione || isNaN(importo) || !dataVal) return alert('Compila tutti i campi obbligatori');
 
-      const nuovaTx = { 
-        descrizione, 
-        entita: entita || null,
-        importo, 
-        data: dataVal, 
-        tipo, 
-        categoria: categoria,
-        user_id: currentUser.id
-      };
+      const nuovaTx = { descrizione, entita: entita || null, importo, data: dataVal, tipo, categoria, user_id: currentUser.id };
+      const { data, error } = await supabaseClient.from('transactions').insert([nuovaTx]).select();
 
-      const { data, error } = await supabaseClient
-        .from('transactions')
-        .insert([nuovaTx])
-        .select();
-
-      if (error) {
-        alert('Errore salvataggio: ' + error.message);
-        return;
-      }
+      if (error) return alert('Errore salvataggio: ' + error.message);
 
       transazioni.unshift(data[0]);
       renderTransactions();
       updateDashboard();
-      
       document.getElementById('form-transaction').reset();
       document.getElementById('data').valueAsDate = new Date();
       alert('Movimento salvato con successo!');
     });
 
     function renderTransactions() {
-      const listEl = document.getElementById('list-transactions');
-      listEl.innerHTML = transazioni.map(t => `
+      document.getElementById('list-transactions').innerHTML = transazioni.map(t => `
         <li>
           <div>
             <strong>${t.descrizione}</strong> <small style="color:#666;">(${t.categoria || 'Generale'})</small><br>
@@ -514,9 +442,7 @@
     }
 
     function updateDashboard() {
-      let entrate = 0;
-      let uscite = 0;
-
+      let entrate = 0, uscite = 0;
       transazioni.forEach(t => {
         const val = parseFloat(t.importo) || 0;
         if (t.tipo === 'entrata') entrate += val;
@@ -524,23 +450,12 @@
       });
 
       const saldo = entrate - uscite;
-
-      const saldoEl = document.getElementById('summary-saldo');
-      const entrateEl = document.getElementById('summary-entrate');
-      const usciteEl = document.getElementById('summary-uscite');
-
-      if (isSummaryVisible) {
-        saldoEl.innerText = `€${saldo.toFixed(2)}`;
-        entrateEl.innerText = `+€${entrate.toFixed(2)}`;
-        usciteEl.innerText = `-€${uscite.toFixed(2)}`;
-      } else {
-        saldoEl.innerText = '••••••';
-        entrateEl.innerText = '••••••';
-        usciteEl.innerText = '••••••';
-      }
+      document.getElementById('summary-saldo').innerText = isSummaryVisible ? `€${saldo.toFixed(2)}` : '••••••';
+      document.getElementById('summary-entrate').innerText = isSummaryVisible ? `+€${entrate.toFixed(2)}` : '••••••';
+      document.getElementById('summary-uscite').innerText = isSummaryVisible ? `-€${uscite.toFixed(2)}` : '••••••';
     }
 
-    // ================= GESTIONE REPORT =================
+    // ================= GESTIONE REPORT GRAFICI (CHART.JS) =================
     function renderReports() {
       const catTotals = {};
       const entTotals = {};
@@ -550,42 +465,80 @@
         const cat = t.categoria || 'Senza Categoria';
         const ent = t.entita || 'Nessuno';
 
-        // Calcolo per Categoria
-        if (!catTotals[cat]) catTotals[cat] = { entrata: 0, uscita: 0 };
-        catTotals[cat][t.tipo] += val;
+        // Solo Uscite per la Torta delle Categorie
+        if (t.tipo === 'uscita') {
+          catTotals[cat] = (catTotals[cat] || 0) + val;
+        }
 
-        // Calcolo per Cliente/Fornitore
+        // Totali per Cliente/Fornitore (Entrate e Uscite)
         if (!entTotals[ent]) entTotals[ent] = { entrata: 0, uscita: 0 };
         entTotals[ent][t.tipo] += val;
       });
 
-      // Render Categorie
-      const catReportEl = document.getElementById('report-categories');
-      catReportEl.innerHTML = Object.keys(catTotals).length === 0 
-        ? '<li>Nessun dato disponibile</li>'
-        : Object.entries(catTotals).map(([name, totals]) => `
-          <li>
-            <span><strong>${name}</strong></span>
-            <div>
-              ${totals.entrata > 0 ? `<span style="color:#34c759; margin-right:8px;">+€${totals.entrata.toFixed(2)}</span>` : ''}
-              ${totals.uscita > 0 ? `<span style="color:#ff3b30;">-€${totals.uscita.toFixed(2)}</span>` : ''}
-            </div>
-          </li>
-        `).join('');
+      // --- 1. GRAFICO A TORTA (Spese per Categoria) ---
+      const catCtx = document.getElementById('chart-categories').getContext('2d');
+      if (categoriesChartInstance) categoriesChartInstance.destroy();
 
-      // Render Clienti / Fornitori
-      const entReportEl = document.getElementById('report-entities');
-      entReportEl.innerHTML = Object.keys(entTotals).length === 0 
-        ? '<li>Nessun dato disponibile</li>'
-        : Object.entries(entTotals).map(([name, totals]) => `
-          <li>
-            <span><strong>${name}</strong></span>
-            <div>
-              ${totals.entrata > 0 ? `<span style="color:#34c759; margin-right:8px;">+€${totals.entrata.toFixed(2)}</span>` : ''}
-              ${totals.uscita > 0 ? `<span style="color:#ff3b30;">-€${totals.uscita.toFixed(2)}</span>` : ''}
-            </div>
-          </li>
-        `).join('');
+      const catLabels = Object.keys(catTotals);
+      const catData = Object.values(catTotals);
+
+      categoriesChartInstance = new Chart(catCtx, {
+        type: 'pie',
+        data: {
+          labels: catLabels,
+          datasets: [{
+            data: catData,
+            backgroundColor: [
+              '#FF6384', '#36A2EB', '#FFCE56', '#4BC0C0', 
+              '#9966FF', '#FF9F40', '#E7E9ED', '#8AC926'
+            ]
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: {
+            legend: { position: 'bottom' }
+          }
+        }
+      });
+
+      // --- 2. GRAFICO A BARRE (Clienti / Fornitori) ---
+      const entCtx = document.getElementById('chart-entities').getContext('2d');
+      if (entitiesChartInstance) entitiesChartInstance.destroy();
+
+      const entLabels = Object.keys(entTotals);
+      const entEntrate = entLabels.map(lbl => entTotals[lbl].entrata);
+      const entUscite = entLabels.map(lbl => entTotals[lbl].uscita);
+
+      entitiesChartInstance = new Chart(entCtx, {
+        type: 'bar',
+        data: {
+          labels: entLabels,
+          datasets: [
+            {
+              label: 'Entrate (€)',
+              data: entEntrate,
+              backgroundColor: '#34c759'
+            },
+            {
+              label: 'Uscite (€)',
+              data: entUscite,
+              backgroundColor: '#ff3b30'
+            }
+          ]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          scales: {
+            y: { beginAtZero: true }
+          },
+          plugins: {
+            legend: { position: 'bottom' }
+          }
+        }
+      });
     }
   </script>
 </body>
