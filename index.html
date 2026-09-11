@@ -96,6 +96,7 @@
     <div class="nav-tabs">
       <button class="tab-btn active" onclick="switchTab('tab-nuovo')">+ Nuovo</button>
       <button class="tab-btn" onclick="switchTab('tab-storico')">📋 Storico</button>
+      <button class="tab-btn" onclick="switchTab('tab-report')">📊 Report</button>
       <button class="tab-btn" onclick="switchTab('tab-gestione')">⚙️ Gestione</button>
     </div>
 
@@ -131,8 +132,10 @@
           <input type="number" step="0.01" id="importo" placeholder="Importo (€)" required>
           <input type="date" id="data" required>
           
-          <!-- Cliente / Fornitore (Testo libero) -->
-          <input type="text" id="entita" placeholder="Cliente / Fornitore (Opzionale)">
+          <!-- Cliente / Fornitore (Scelta a finestra da DB) -->
+          <select id="entita">
+            <option value="">-- Nessun Cliente/Fornitore --</option>
+          </select>
 
           <select id="tipo">
             <option value="uscita">Uscita</option>
@@ -153,7 +156,20 @@
       <ul id="list-transactions" class="item-list"></ul>
     </div>
 
-    <!-- TAB 3: GESTIONE CATEGORIE -->
+    <!-- TAB 3: REPORT & STATISTICHE -->
+    <div id="tab-report" class="tab-content hidden">
+      <div class="card">
+        <h3>📊 Totali per Categoria</h3>
+        <ul id="report-categories" class="item-list"></ul>
+      </div>
+
+      <div class="card">
+        <h3>👤 Totali per Cliente / Fornitore</h3>
+        <ul id="report-entities" class="item-list"></ul>
+      </div>
+    </div>
+
+    <!-- TAB 4: GESTIONE CATEGORIE -->
     <div id="tab-gestione" class="tab-content hidden">
       <div class="card">
         <h3>📂 Gestione Categorie</h3>
@@ -198,7 +214,8 @@
     let currentUser = null;
     let transazioni = [];
     let categorie = [...defaultCategories];
-    let isSummaryVisible = false; // Nascosto di default
+    let entitaList = [];
+    let isSummaryVisible = false;
 
     // Inizializzazione data odierna
     document.getElementById('data').valueAsDate = new Date();
@@ -292,6 +309,7 @@
       currentUser = null;
       transazioni = [];
       categorie = [...defaultCategories];
+      entitaList = [];
       isSummaryVisible = false;
       document.getElementById('auth-section').classList.remove('hidden');
       document.getElementById('app-section').classList.add('hidden');
@@ -304,6 +322,10 @@
       
       document.getElementById(tabId).classList.remove('hidden');
       event.target.classList.add('active');
+
+      if (tabId === 'tab-report') {
+        renderReports();
+      }
     }
 
     // ================= GESTIONE VISIBILITÀ RIEPILOGO =================
@@ -318,20 +340,30 @@
       updateDashboard();
     }
 
-    // ================= CARICAMENTO CATEGORIE =================
+    // ================= CARICAMENTO ANAGRAFICHE =================
     async function loadMasterData() {
       if (!currentUser) return;
 
+      // Carica Categorie dal DB
       const { data: catData, error: catErr } = await supabaseClient
         .from('categories')
         .select('*')
         .order('name');
 
       if (!catErr && catData && catData.length > 0) {
-        // Unisci le categorie custom caricate dal DB a quelle default
         categorie = [...defaultCategories, ...catData];
       } else {
         categorie = [...defaultCategories];
+      }
+
+      // Carica Entità (Clienti/Fornitori dal DB per il menu a tendina)
+      const { data: entData, error: entErr } = await supabaseClient
+        .from('entities')
+        .select('*')
+        .order('name');
+
+      if (!entErr) {
+        entitaList = entData || [];
       }
 
       renderMasterDataLists();
@@ -349,11 +381,17 @@
     }
 
     function populateDropdowns() {
+      // Menu Dropdown Categorie
       const catSelect = document.getElementById('categoria');
       catSelect.innerHTML = categorie.map(c => `<option value="${c.name}">${c.name} (${c.type})</option>`).join('');
+
+      // Menu Dropdown Clienti/Fornitori dal DB
+      const entSelect = document.getElementById('entita');
+      entSelect.innerHTML = `<option value="">-- Nessun Cliente/Fornitore --</option>` + 
+        entitaList.map(e => `<option value="${e.name}">${e.name}</option>`).join('');
     }
 
-    // Salvataggio Nuova Categoria
+    // Aggiunta Categoria
     document.getElementById('form-category').addEventListener('submit', async (e) => {
       e.preventDefault();
       const name = document.getElementById('new-cat-name').value.trim();
@@ -410,7 +448,7 @@
       const descrizione = document.getElementById('descrizione').value.trim();
       const importo = parseFloat(document.getElementById('importo').value);
       const dataVal = document.getElementById('data').value;
-      const entita = document.getElementById('entita').value.trim();
+      const entita = document.getElementById('entita').value;
       const tipo = document.getElementById('tipo').value;
       const categoria = document.getElementById('categoria').value;
 
@@ -488,6 +526,54 @@
         entrateEl.innerText = '••••••';
         usciteEl.innerText = '••••••';
       }
+    }
+
+    // ================= GESTIONE REPORT =================
+    function renderReports() {
+      const catTotals = {};
+      const entTotals = {};
+
+      transazioni.forEach(t => {
+        const val = parseFloat(t.importo) || 0;
+        const cat = t.categoria || 'Senza Categoria';
+        const ent = t.entita || 'Nessuno';
+
+        // Calcolo per Categoria
+        if (!catTotals[cat]) catTotals[cat] = { entrata: 0, uscita: 0 };
+        catTotals[cat][t.tipo] += val;
+
+        // Calcolo per Cliente/Fornitore
+        if (!entTotals[ent]) entTotals[ent] = { entrata: 0, uscita: 0 };
+        entTotals[ent][t.tipo] += val;
+      });
+
+      // Render Categorie
+      const catReportEl = document.getElementById('report-categories');
+      catReportEl.innerHTML = Object.keys(catTotals).length === 0 
+        ? '<li>Nessun dato disponibile</li>'
+        : Object.entries(catTotals).map(([name, totals]) => `
+          <li>
+            <span><strong>${name}</strong></span>
+            <div>
+              ${totals.entrata > 0 ? `<span style="color:#34c759; margin-right:8px;">+€${totals.entrata.toFixed(2)}</span>` : ''}
+              ${totals.uscita > 0 ? `<span style="color:#ff3b30;">-€${totals.uscita.toFixed(2)}</span>` : ''}
+            </div>
+          </li>
+        `).join('');
+
+      // Render Entità
+      const entReportEl = document.getElementById('report-entities');
+      entReportEl.innerHTML = Object.keys(entTotals).length === 0 
+        ? '<li>Nessun dato disponibile</li>'
+        : Object.entries(entTotals).map(([name, totals]) => `
+          <li>
+            <span><strong>${name}</strong></span>
+            <div>
+              ${totals.entrata > 0 ? `<span style="color:#34c759; margin-right:8px;">+€${totals.entrata.toFixed(2)}</span>` : ''}
+              ${totals.uscita > 0 ? `<span style="color:#ff3b30;">-€${totals.uscita.toFixed(2)}</span>` : ''}
+            </div>
+          </li>
+        `).join('');
     }
   </script>
 </body>
