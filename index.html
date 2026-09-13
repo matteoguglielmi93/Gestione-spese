@@ -21,7 +21,7 @@
     .btn-secondary { background-color: #e5e5ea; color: #333; }
     .btn-danger { background-color: #ff3b30; color: white; }
     
-    /* Layout Inline per Tendina + Pulsante */
+    /* Layout Inline */
     .input-inline-group { display: flex; gap: 8px; align-items: center; }
     .input-inline-group select { flex: 1; margin-bottom: 10px; }
     .input-inline-group button { width: auto; padding: 12px 16px; margin-bottom: 10px; font-size: 1.1rem; }
@@ -60,6 +60,10 @@
 
     /* Contenitori Grafici */
     .chart-container { position: relative; width: 100%; max-height: 350px; margin-top: 12px; }
+    
+    /* Layout Filtri Report */
+    .report-filters { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 8px; }
+    .report-filters select, .report-filters input { flex: 1; min-width: 120px; margin-bottom: 0; }
   </style>
 </head>
 <body>
@@ -137,7 +141,6 @@
           <input type="number" step="0.01" id="importo" placeholder="Importo (€)" required>
           <input type="date" id="data" required>
           
-          <!-- Cliente / Fornitore con pulsante rapido per l'inserimento -->
           <div class="input-inline-group">
             <select id="entita" onchange="handleEntityChange(this)">
               <option value="">-- Caricamento Clienti/Fornitori... --</option>
@@ -165,6 +168,36 @@
 
     <!-- TAB 3: REPORT & GRAFICI -->
     <div id="tab-report" class="tab-content hidden">
+      <!-- Filtri Periodo -->
+      <div class="card" style="padding: 12px;">
+        <h4 style="margin-bottom: 8px;">📅 Filtro Periodo</h4>
+        <div class="report-filters">
+          <select id="report-filter-preset" onchange="handlePresetChange(this.value)">
+            <option value="current_month" selected>Mese Corrente</option>
+            <option value="current_year">Anno Corrente</option>
+            <option value="all">Tutti i Tempi</option>
+            <option value="custom">Personalizzato</option>
+          </select>
+
+          <select id="report-filter-month" onchange="renderReports()">
+            <option value="1">Gennaio</option>
+            <option value="2">Febbraio</option>
+            <option value="3">Marzo</option>
+            <option value="4">Aprile</option>
+            <option value="5">Maggio</option>
+            <option value="6">Giugno</option>
+            <option value="7">Luglio</option>
+            <option value="8">Agosto</option>
+            <option value="9">Settembre</option>
+            <option value="10">Ottobre</option>
+            <option value="11">Novembre</option>
+            <option value="12">Dicembre</option>
+          </select>
+
+          <select id="report-filter-year" onchange="renderReports()"></select>
+        </div>
+      </div>
+
       <div class="card">
         <h3>🍕 Spese per Categoria</h3>
         <div class="chart-container">
@@ -205,8 +238,9 @@
 
   <!-- ================= SCRIPT JAVASCRIPT ================= -->
   <script>
-  const SUPABASE_URL = 'https://owqspxfgueqzivrwvupp.supabase.co'; // Sostituisci con il tuo URL
+    const SUPABASE_URL = 'https://owqspxfgueqzivrwvupp.supabase.co'; // Sostituisci con il tuo URL
     const SUPABASE_ANON_KEY = 'sb_publishable_HEp-x3FM0m_Ym8h7O1etFw_0ZojwUk7'; // Sostituisci con la tua chiave 
+
 
     const supabaseProvider = window.supabase || supabase;
     const supabaseClient = supabaseProvider.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
@@ -233,6 +267,9 @@
     let entitiesChartInstance = null;
 
     document.getElementById('data').valueAsDate = new Date();
+
+    // Inizializza Filtri Anno e Mese al caricamento
+    initReportFilters();
 
     supabaseClient.auth.getSession().then(({ data: { session } }) => {
       if (session) onLoginSuccess(session.user);
@@ -321,6 +358,52 @@
       updateDashboard();
     }
 
+    // ================= GESTIONE FILTRI REPORT =================
+    function initReportFilters() {
+      const now = new Date();
+      const currentYear = now.getFullYear();
+      const currentMonth = now.getMonth() + 1;
+
+      // Popola la Select Anni (da 5 anni fa a +1 nel futuro)
+      const yearSelect = document.getElementById('report-filter-year');
+      yearSelect.innerHTML = '';
+      for (let y = currentYear - 5; y <= currentYear + 1; y++) {
+        const opt = document.createElement('option');
+        opt.value = y;
+        opt.innerText = y;
+        if (y === currentYear) opt.selected = true;
+        yearSelect.appendChild(opt);
+      }
+
+      // Seleziona Mese Corrente
+      document.getElementById('report-filter-month').value = currentMonth;
+    }
+
+    function handlePresetChange(preset) {
+      const monthSelect = document.getElementById('report-filter-month');
+      const yearSelect = document.getElementById('report-filter-year');
+      const now = new Date();
+
+      if (preset === 'current_month') {
+        monthSelect.disabled = false;
+        yearSelect.disabled = false;
+        monthSelect.value = now.getMonth() + 1;
+        yearSelect.value = now.getFullYear();
+      } else if (preset === 'current_year') {
+        monthSelect.disabled = true;
+        yearSelect.disabled = false;
+        yearSelect.value = now.getFullYear();
+      } else if (preset === 'all') {
+        monthSelect.disabled = true;
+        yearSelect.disabled = true;
+      } else if (preset === 'custom') {
+        monthSelect.disabled = false;
+        yearSelect.disabled = false;
+      }
+
+      renderReports();
+    }
+
     async function loadMasterData() {
       if (!currentUser) return;
 
@@ -336,7 +419,6 @@
         .select('*')
         .order('name');
 
-      // Se vuota, recupera dai vecchi movimenti 'transactions' e popola
       if (!entErr && (!entData || entData.length === 0)) {
         const { data: txData } = await supabaseClient
           .from('transactions')
@@ -396,10 +478,9 @@
       }
     }
 
-    // ================= INSERIMENTO DINAMICO CLIENTE / FORNITORE =================
     function handleEntityChange(selectEl) {
       if (selectEl.value === '__NEW_ENTITY__') {
-        selectEl.value = ''; // ripristina temporaneamente
+        selectEl.value = '';
         addNewEntity();
       }
     }
@@ -410,14 +491,12 @@
 
       const nomeClean = nomeEntita.trim();
 
-      // Controlla se esiste già
       const giaEsistente = entitaList.find(e => e.name.toLowerCase() === nomeClean.toLowerCase());
       if (giaEsistente) {
         populateDropdowns(giaEsistente.name);
         return;
       }
 
-      // Salva sul DB Supabase
       const { data, error } = await supabaseClient
         .from('entities')
         .insert([{ name: nomeClean, user_id: currentUser.id }])
@@ -429,7 +508,7 @@
         entitaList.push(data[0]);
         entitaList.sort((a, b) => a.name.localeCompare(b.name));
         renderMasterDataLists();
-        populateDropdowns(nomeClean); // Seleziona subito il nuovo elemento
+        populateDropdowns(nomeClean);
       }
     }
 
@@ -531,11 +610,33 @@
       document.getElementById('summary-uscite').innerText = isSummaryVisible ? `-€${uscite.toFixed(2)}` : '••••••';
     }
 
+    // ================= CALCOLO E RENDERING REPORT CON FILTRI =================
     function renderReports() {
+      const preset = document.getElementById('report-filter-preset').value;
+      const selectedMonth = parseInt(document.getElementById('report-filter-month').value, 10);
+      const selectedYear = parseInt(document.getElementById('report-filter-year').value, 10);
+
+      // Filtra le transazioni in base alle date selezionate
+      const transazioniFiltrate = transazioni.filter(t => {
+        if (!t.data) return false;
+        const d = new Date(t.data);
+        const txMonth = d.getMonth() + 1;
+        const txYear = d.getFullYear();
+
+        if (preset === 'current_month' || preset === 'custom') {
+          return txMonth === selectedMonth && txYear === selectedYear;
+        } else if (preset === 'current_year') {
+          return txYear === selectedYear;
+        } else if (preset === 'all') {
+          return true;
+        }
+        return true;
+      });
+
       const catTotals = {};
       const entTotals = {};
 
-      transazioni.forEach(t => {
+      transazioniFiltrate.forEach(t => {
         const val = parseFloat(t.importo) || 0;
         const cat = t.categoria || 'Senza Categoria';
         const ent = t.entita || 'Nessuno';
@@ -548,6 +649,7 @@
         entTotals[ent][t.tipo] += val;
       });
 
+      // Render Grafico Categorie
       const catCtx = document.getElementById('chart-categories').getContext('2d');
       if (categoriesChartInstance) categoriesChartInstance.destroy();
 
@@ -563,6 +665,7 @@
         options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'bottom' } } }
       });
 
+      // Render Grafico Clienti / Fornitori
       const entCtx = document.getElementById('chart-entities').getContext('2d');
       if (entitiesChartInstance) entitiesChartInstance.destroy();
 
@@ -582,4 +685,3 @@
   </script>
 </body>
 </html>
-u
