@@ -21,6 +21,11 @@
     .btn-secondary { background-color: #e5e5ea; color: #333; }
     .btn-danger { background-color: #ff3b30; color: white; }
     
+    /* Layout Inline per Tendina + Pulsante */
+    .input-inline-group { display: flex; gap: 8px; align-items: center; }
+    .input-inline-group select { flex: 1; margin-bottom: 10px; }
+    .input-inline-group button { width: auto; padding: 12px 16px; margin-bottom: 10px; font-size: 1.1rem; }
+
     /* Layout Auth */
     .auth-container { max-width: 400px; margin: 40px auto; }
     .auth-links { text-align: center; margin-top: 10px; }
@@ -132,9 +137,13 @@
           <input type="number" step="0.01" id="importo" placeholder="Importo (€)" required>
           <input type="date" id="data" required>
           
-          <select id="entita">
-            <option value="">-- Caricamento Clienti/Fornitori... --</option>
-          </select>
+          <!-- Cliente / Fornitore con pulsante rapido per l'inserimento -->
+          <div class="input-inline-group">
+            <select id="entita" onchange="handleEntityChange(this)">
+              <option value="">-- Caricamento Clienti/Fornitori... --</option>
+            </select>
+            <button type="button" onclick="addNewEntity()" title="Aggiungi nuovo cliente/fornitore">+</button>
+          </div>
 
           <select id="tipo">
             <option value="uscita">Uscita</option>
@@ -156,7 +165,6 @@
 
     <!-- TAB 3: REPORT & GRAFICI -->
     <div id="tab-report" class="tab-content hidden">
-      <!-- GRAFICO 1: TORTA (CATEGORIE) -->
       <div class="card">
         <h3>🍕 Spese per Categoria</h3>
         <div class="chart-container">
@@ -164,7 +172,6 @@
         </div>
       </div>
 
-      <!-- GRAFICO 2: BARRE (CLIENTI / FORNITORI) -->
       <div class="card">
         <h3>📊 Totali per Cliente / Fornitore</h3>
         <div class="chart-container">
@@ -173,7 +180,7 @@
       </div>
     </div>
 
-    <!-- TAB 4: GESTIONE CATEGORIE -->
+    <!-- TAB 4: GESTIONE CATEGORIE & ENTITÀ -->
     <div id="tab-gestione" class="tab-content hidden">
       <div class="card">
         <h3>📂 Gestione Categorie</h3>
@@ -187,13 +194,18 @@
         </form>
         <ul id="list-categories" class="item-list"></ul>
       </div>
+
+      <div class="card">
+        <h3>👤 Gestione Clienti / Fornitori</h3>
+        <ul id="list-entities" class="item-list"></ul>
+      </div>
     </div>
 
   </div>
 
   <!-- ================= SCRIPT JAVASCRIPT ================= -->
   <script>
-    const SUPABASE_URL = 'https://owqspxfgueqzivrwvupp.supabase.co'; // Sostituisci con il tuo URL
+  const SUPABASE_URL = 'https://owqspxfgueqzivrwvupp.supabase.co'; // Sostituisci con il tuo URL
     const SUPABASE_ANON_KEY = 'sb_publishable_HEp-x3FM0m_Ym8h7O1etFw_0ZojwUk7'; // Sostituisci con la tua chiave 
 
     const supabaseProvider = window.supabase || supabase;
@@ -217,7 +229,6 @@
     let entitaList = [];
     let isSummaryVisible = false;
 
-    // Istanze Grafici Chart.js
     let categoriesChartInstance = null;
     let entitiesChartInstance = null;
 
@@ -325,7 +336,7 @@
         .select('*')
         .order('name');
 
-      // Se la tabella 'entities' è vuota, recupera dai vecchi movimenti 'transactions'
+      // Se vuota, recupera dai vecchi movimenti 'transactions' e popola
       if (!entErr && (!entData || entData.length === 0)) {
         const { data: txData } = await supabaseClient
           .from('transactions')
@@ -354,18 +365,82 @@
           ${String(c.id).startsWith('def-') ? '<small style="color:#999;">(Predefinita)</small>' : `<button onclick="deleteCategory(${c.id})" class="btn-danger" style="width:auto; padding: 4px 8px;">❌</button>`}
         </li>
       `).join('');
+
+      const entListEl = document.getElementById('list-entities');
+      if (entListEl) {
+        entListEl.innerHTML = entitaList.length === 0
+          ? '<li><small style="color:#888;">Nessun cliente/fornitore salvato</small></li>'
+          : entitaList.map(e => `
+            <li>
+              <span><strong>${e.name}</strong></span>
+              ${e.id ? `<button onclick="deleteEntity(${e.id})" class="btn-danger" style="width:auto; padding: 4px 8px;">❌</button>` : ''}
+            </li>
+          `).join('');
+      }
     }
 
-    function populateDropdowns() {
+    function populateDropdowns(selectedEntity = '') {
       const catSelect = document.getElementById('categoria');
       if (catSelect) catSelect.innerHTML = categorie.map(c => `<option value="${c.name}">${c.name} (${c.type})</option>`).join('');
 
       const entSelect = document.getElementById('entita');
       if (entSelect) {
-        entSelect.innerHTML = entitaList.length === 0 
-          ? `<option value="">-- Nessun Cliente/Fornitore trovato --</option>`
-          : `<option value="">-- Nessun Cliente/Fornitore --</option>` + entitaList.map(e => `<option value="${e.name}">${e.name}</option>`).join('');
+        let options = `<option value="">-- Nessun Cliente/Fornitore --</option>`;
+        options += `<option value="__NEW_ENTITY__">➕ Add Nuovo Cliente/Fornitore...</option>`;
+        
+        if (entitaList.length > 0) {
+          options += entitaList.map(e => `<option value="${e.name}" ${e.name === selectedEntity ? 'selected' : ''}>${e.name}</option>`).join('');
+        }
+        
+        entSelect.innerHTML = options;
       }
+    }
+
+    // ================= INSERIMENTO DINAMICO CLIENTE / FORNITORE =================
+    function handleEntityChange(selectEl) {
+      if (selectEl.value === '__NEW_ENTITY__') {
+        selectEl.value = ''; // ripristina temporaneamente
+        addNewEntity();
+      }
+    }
+
+    async function addNewEntity() {
+      const nomeEntita = prompt("Inserisci il nome del nuovo Cliente o Fornitore:");
+      if (!nomeEntita || nomeEntita.trim() === "") return;
+
+      const nomeClean = nomeEntita.trim();
+
+      // Controlla se esiste già
+      const giaEsistente = entitaList.find(e => e.name.toLowerCase() === nomeClean.toLowerCase());
+      if (giaEsistente) {
+        populateDropdowns(giaEsistente.name);
+        return;
+      }
+
+      // Salva sul DB Supabase
+      const { data, error } = await supabaseClient
+        .from('entities')
+        .insert([{ name: nomeClean, user_id: currentUser.id }])
+        .select();
+
+      if (error) {
+        alert("Errore durante il salvataggio: " + error.message);
+      } else if (data && data.length > 0) {
+        entitaList.push(data[0]);
+        entitaList.sort((a, b) => a.name.localeCompare(b.name));
+        renderMasterDataLists();
+        populateDropdowns(nomeClean); // Seleziona subito il nuovo elemento
+      }
+    }
+
+    async function deleteEntity(id) {
+      if (!confirm('Eliminare questo cliente/fornitore?')) return;
+      const { error } = await supabaseClient.from('entities').delete().eq('id', id);
+      if (!error) {
+        entitaList = entitaList.filter(e => e.id !== id);
+        renderMasterDataLists();
+        populateDropdowns();
+      } else alert('Errore: ' + error.message);
     }
 
     document.getElementById('form-category').addEventListener('submit', async (e) => {
@@ -424,6 +499,7 @@
       updateDashboard();
       document.getElementById('form-transaction').reset();
       document.getElementById('data').valueAsDate = new Date();
+      populateDropdowns();
       alert('Movimento salvato con successo!');
     });
 
@@ -455,7 +531,6 @@
       document.getElementById('summary-uscite').innerText = isSummaryVisible ? `-€${uscite.toFixed(2)}` : '••••••';
     }
 
-    // ================= GESTIONE REPORT GRAFICI (CHART.JS) =================
     function renderReports() {
       const catTotals = {};
       const entTotals = {};
@@ -465,81 +540,46 @@
         const cat = t.categoria || 'Senza Categoria';
         const ent = t.entita || 'Nessuno';
 
-        // Solo Uscite per la Torta delle Categorie
         if (t.tipo === 'uscita') {
           catTotals[cat] = (catTotals[cat] || 0) + val;
         }
 
-        // Totali per Cliente/Fornitore (Entrate e Uscite)
         if (!entTotals[ent]) entTotals[ent] = { entrata: 0, uscita: 0 };
         entTotals[ent][t.tipo] += val;
       });
 
-      // --- 1. GRAFICO A TORTA (Spese per Categoria) ---
       const catCtx = document.getElementById('chart-categories').getContext('2d');
       if (categoriesChartInstance) categoriesChartInstance.destroy();
-
-      const catLabels = Object.keys(catTotals);
-      const catData = Object.values(catTotals);
 
       categoriesChartInstance = new Chart(catCtx, {
         type: 'pie',
         data: {
-          labels: catLabels,
+          labels: Object.keys(catTotals),
           datasets: [{
-            data: catData,
-            backgroundColor: [
-              '#FF6384', '#36A2EB', '#FFCE56', '#4BC0C0', 
-              '#9966FF', '#FF9F40', '#E7E9ED', '#8AC926'
-            ]
+            data: Object.values(catTotals),
+            backgroundColor: ['#FF6384', '#36A2EB', '#FFCE56', '#4BC0C0', '#9966FF', '#FF9F40', '#E7E9ED', '#8AC926']
           }]
         },
-        options: {
-          responsive: true,
-          maintainAspectRatio: false,
-          plugins: {
-            legend: { position: 'bottom' }
-          }
-        }
+        options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'bottom' } } }
       });
 
-      // --- 2. GRAFICO A BARRE (Clienti / Fornitori) ---
       const entCtx = document.getElementById('chart-entities').getContext('2d');
       if (entitiesChartInstance) entitiesChartInstance.destroy();
 
       const entLabels = Object.keys(entTotals);
-      const entEntrate = entLabels.map(lbl => entTotals[lbl].entrata);
-      const entUscite = entLabels.map(lbl => entTotals[lbl].uscita);
-
       entitiesChartInstance = new Chart(entCtx, {
         type: 'bar',
         data: {
           labels: entLabels,
           datasets: [
-            {
-              label: 'Entrate (€)',
-              data: entEntrate,
-              backgroundColor: '#34c759'
-            },
-            {
-              label: 'Uscite (€)',
-              data: entUscite,
-              backgroundColor: '#ff3b30'
-            }
+            { label: 'Entrate (€)', data: entLabels.map(l => entTotals[l].entrata), backgroundColor: '#34c759' },
+            { label: 'Uscite (€)', data: entLabels.map(l => entTotals[l].uscita), backgroundColor: '#ff3b30' }
           ]
         },
-        options: {
-          responsive: true,
-          maintainAspectRatio: false,
-          scales: {
-            y: { beginAtZero: true }
-          },
-          plugins: {
-            legend: { position: 'bottom' }
-          }
-        }
+        options: { responsive: true, maintainAspectRatio: false, scales: { y: { beginAtZero: true } }, plugins: { legend: { position: 'bottom' } } }
       });
     }
   </script>
 </body>
 </html>
+u
