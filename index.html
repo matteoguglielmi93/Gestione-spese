@@ -173,7 +173,6 @@
           <input type="number" step="0.01" id="importo" placeholder="Importo (€)" required>
           <input type="date" id="data" required>
           
-          <!-- Ricerca con ricerca testuale + Datalist ed inserimento rapido -->
           <div class="input-inline-group">
             <input type="text" id="entita-search" list="entita-datalist" placeholder="Cerca o scrivi Cliente/Fornitore..." autocomplete="off">
             <datalist id="entita-datalist"></datalist>
@@ -187,11 +186,9 @@
 
           <select id="categoria"></select>
 
-          <!-- Tag / Etichette e Allegato Scontrino -->
           <input type="text" id="tags" placeholder="Tag (es. #vacanza2026, #lavoro)">
           <input type="url" id="receipt-url" placeholder="URL Scontrino / Ricevuta (Opzionale)">
 
-          <!-- Pulsanti Salva e Svuota Form -->
           <div style="display: flex; gap: 8px;">
             <button type="submit" style="flex: 2;">Salva Movimento</button>
             <button type="button" class="btn-secondary" onclick="resetNewTransactionForm()" style="flex: 1;">🧹 Svuota</button>
@@ -204,7 +201,6 @@
     <div id="tab-storico" class="tab-content card hidden">
       <h3>Storico Transazioni</h3>
       
-      <!-- Filtri di Ricerca Avanzata -->
       <div style="background: var(--bg-color); padding: 10px; border-radius: 8px; margin-bottom: 12px;">
         <small style="font-weight: bold; display: block; margin-bottom: 6px;">🔍 Ricerca e Filtri Avanzati</small>
         <div class="filter-grid">
@@ -269,12 +265,10 @@
         </div>
       </div>
 
-      <!-- GRAFICO BARRE CLIENTE / FORNITORE -->
+      <!-- LISTA TOTALI PER CLIENTE / FORNITORE (SOLO USCITE) -->
       <div class="card">
-        <h3>📊 Totali per Cliente / Fornitore (Solo Uscite)</h3>
-        <div class="chart-container">
-          <canvas id="chart-entities"></canvas>
-        </div>
+        <h3>👤 Totali per Cliente / Fornitore (Uscite)</h3>
+        <ul id="list-report-entities" class="item-list"></ul>
       </div>
     </div>
 
@@ -304,7 +298,7 @@
   <!-- ================= SCRIPT JAVASCRIPT ================= -->
   <script>
     const SUPABASE_URL = 'https://owqspxfgueqzivrwvupp.supabase.co'; // Sostituisci con il tuo URL
-    const SUPABASE_ANON_KEY = 'sb_publishable_HEp-x3FM0m_Ym8h7O1etFw_0ZojwUk7'; // Sostituisci con la tua chiave  
+    const SUPABASE_ANON_KEY = 'sb_publishable_HEp-x3FM0m_Ym8h7O1etFw_0ZojwUk7'; // Sostituisci con la tua chiave 
 
     const supabaseProvider = window.supabase || supabase;
     const supabaseClient = supabaseProvider.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
@@ -330,7 +324,6 @@
     // Istanze Grafici
     let cashflowChartInstance = null;
     let categoriesChartInstance = null;
-    let entitiesChartInstance = null;
 
     // Gestione Tema Scuro / Chiaro
     function initTheme() {
@@ -804,33 +797,22 @@
         }
       });
 
-      // --- 3. BAR CHART CLIENTE / FORNITORE (SOLO USCITE ORDINATE DECRESCENTI) ---
-      const entCtx = document.getElementById('chart-entities').getContext('2d');
-      if (entitiesChartInstance) entitiesChartInstance.destroy();
-
+      // --- 3. LISTA TESTUALE CLIENTE / FORNITORE (SOLO USCITE ORDINATE DECRESCENTI) ---
       const sortedEntities = Object.entries(entUsciteTotals).sort((a, b) => b[1] - a[1]);
-      const entLabels = sortedEntities.map(item => item[0]);
-      const entValues = sortedEntities.map(item => item[1]);
+      const reportEntitiesListEl = document.getElementById('list-report-entities');
 
-      entitiesChartInstance = new Chart(entCtx, {
-        type: 'bar',
-        data: {
-          labels: entLabels,
-          datasets: [
-            { 
-              label: 'Uscite (€)', 
-              data: entValues, 
-              backgroundColor: '#ff3b30' 
-            }
-          ]
-        },
-        options: { 
-          responsive: true, 
-          maintainAspectRatio: false, 
-          scales: { y: { beginAtZero: true } }, 
-          plugins: { legend: { position: 'bottom' } } 
+      if (reportEntitiesListEl) {
+        if (sortedEntities.length === 0) {
+          reportEntitiesListEl.innerHTML = '<li><small style="color:var(--text-muted);">Nessuna uscita registrata per il periodo selezionato</small></li>';
+        } else {
+          reportEntitiesListEl.innerHTML = sortedEntities.map(([nome, importo]) => `
+            <li>
+              <span><strong>${nome}</strong></span>
+              <span style="font-weight: bold; color: #ff3b30;">-€${importo.toFixed(2)}</span>
+            </li>
+          `).join('');
         }
-      });
+      }
     }
   </script>
 </body>
