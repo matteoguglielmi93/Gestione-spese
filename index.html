@@ -173,11 +173,11 @@
           <input type="number" step="0.01" id="importo" placeholder="Importo (€)" required>
           <input type="date" id="data" required>
           
+          <!-- Ricerca con ricerca testuale + Datalist ed inserimento rapido -->
           <div class="input-inline-group">
-            <select id="entita" onchange="handleEntityChange(this)">
-              <option value="">-- Caricamento Clienti/Fornitori... --</option>
-            </select>
-            <button type="button" onclick="addNewEntity()" title="Aggiungi nuovo cliente/fornitore">+</button>
+            <input type="text" id="entita-search" list="entita-datalist" placeholder="Cerca o scrivi Cliente/Fornitore..." autocomplete="off">
+            <datalist id="entita-datalist"></datalist>
+            <button type="button" onclick="quickSaveNewEntity()" title="Salva questo cliente/fornitore nel DB">+</button>
           </div>
 
           <select id="tipo">
@@ -191,7 +191,11 @@
           <input type="text" id="tags" placeholder="Tag (es. #vacanza2026, #lavoro)">
           <input type="url" id="receipt-url" placeholder="URL Scontrino / Ricevuta (Opzionale)">
 
-          <button type="submit">Salva Movimento</button>
+          <!-- Pulsanti Salva e Svuota Form -->
+          <div style="display: flex; gap: 8px;">
+            <button type="submit" style="flex: 2;">Salva Movimento</button>
+            <button type="button" class="btn-secondary" onclick="resetNewTransactionForm()" style="flex: 1;">🧹 Svuota</button>
+          </div>
         </form>
       </div>
     </div>
@@ -340,7 +344,7 @@
       const newTheme = currentTheme === 'dark' ? 'light' : 'dark';
       document.documentElement.setAttribute('data-theme', newTheme);
       localStorage.setItem('app-theme', newTheme);
-      if (currentUser) renderReports(); // Ridisegna grafici adattandoli
+      if (currentUser) renderReports();
     }
 
     document.getElementById('data').valueAsDate = new Date();
@@ -421,7 +425,6 @@
       
       document.getElementById(tabId).classList.remove('hidden');
       
-      // Evidenzia bottone attivo
       const activeBtn = Array.from(document.querySelectorAll('.tab-btn')).find(b => b.getAttribute('onclick').includes(tabId));
       if (activeBtn) activeBtn.classList.add('active');
 
@@ -483,8 +486,8 @@
         if (txData && txData.length > 0) {
           const nomiUnici = [...new Set(txData.map(t => t.entita ? t.entita.trim() : '').filter(nome => nome !== ''))];
           if (nomiUnici.length > 0) {
-            const nuoveEntita = nomiUnici.map(nome => ({ name: nome, user_id: currentUser.id }));
-            const { data: insertedData } = await supabaseClient.from('entities').insert(nuoveEntita).select();
+            const meEntita = nomiUnici.map(nome => ({ name: nome, user_id: currentUser.id }));
+            const { data: insertedData } = await supabaseClient.from('entities').insert(meEntita).select();
             if (insertedData) entData = insertedData;
           }
         }
@@ -516,7 +519,7 @@
       }
     }
 
-    function populateDropdowns(selectedEntity = '') {
+    function populateDropdowns() {
       const catSelect = document.getElementById('categoria');
       if (catSelect) catSelect.innerHTML = categorie.map(c => `<option value="${c.name}">${c.name} (${c.type})</option>`).join('');
 
@@ -525,42 +528,38 @@
         filterCatSelect.innerHTML = `<option value="">Tutte le categorie</option>` + categorie.map(c => `<option value="${c.name}">${c.name}</option>`).join('');
       }
 
-      const entSelect = document.getElementById('entita');
-      if (entSelect) {
-        let options = `<option value="">-- Nessun Cliente/Fornitore --</option>`;
-        options += `<option value="__NEW_ENTITY__">➕ Add Nuovo Cliente/Fornitore...</option>`;
-        if (entitaList.length > 0) {
-          options += entitaList.map(e => `<option value="${e.name}" ${e.name === selectedEntity ? 'selected' : ''}>${e.name}</option>`).join('');
-        }
-        entSelect.innerHTML = options;
+      // Popola il datalist per la ricerca di Clienti / Fornitori
+      const entDatalist = document.getElementById('entita-datalist');
+      if (entDatalist) {
+        entDatalist.innerHTML = entitaList.map(e => `<option value="${e.name}"></option>`).join('');
       }
     }
 
-    function handleEntityChange(selectEl) {
-      if (selectEl.value === '__NEW_ENTITY__') {
-        selectEl.value = '';
-        addNewEntity();
-      }
-    }
+    // SALVATAGGIO RAPIDO DI UN NUOVO CLIENTE / FORNITORE DAL CAMPO DI RICERCA
+    async function quickSaveNewEntity() {
+      const inputEl = document.getElementById('entita-search');
+      const nomeClean = inputEl.value.trim();
 
-    async function addNewEntity() {
-      const nomeEntita = prompt("Inserisci il nome del nuovo Cliente o Fornitore:");
-      if (!nomeEntita || nomeEntita.trim() === "") return;
-      const nomeClean = nomeEntita.trim();
+      if (!nomeClean) {
+        alert("Scrivi il nome del cliente o fornitore nel campo prima di premere +");
+        return;
+      }
 
       const giaEsistente = entitaList.find(e => e.name.toLowerCase() === nomeClean.toLowerCase());
       if (giaEsistente) {
-        populateDropdowns(giaEsistente.name);
+        alert("Questo Cliente/Fornitore è già registrato nel database!");
         return;
       }
 
       const { data, error } = await supabaseClient.from('entities').insert([{ name: nomeClean, user_id: currentUser.id }]).select();
-      if (error) alert("Errore durante il salvataggio: " + error.message);
-      else if (data && data.length > 0) {
+      if (error) {
+        alert("Errore durante il salvataggio: " + error.message);
+      } else if (data && data.length > 0) {
         entitaList.push(data[0]);
         entitaList.sort((a, b) => a.name.localeCompare(b.name));
         renderMasterDataLists();
-        populateDropdowns(nomeClean);
+        populateDropdowns();
+        alert(`"${nomeClean}" salvato correttamente nel database!`);
       }
     }
 
@@ -609,18 +608,38 @@
       updateDashboard();
     }
 
+    function resetNewTransactionForm() {
+      document.getElementById('form-transaction').reset();
+      document.getElementById('data').valueAsDate = new Date();
+      document.getElementById('entita-search').value = '';
+      populateDropdowns();
+    }
+
     document.getElementById('form-transaction').addEventListener('submit', async (e) => {
       e.preventDefault();
       const descrizione = document.getElementById('descrizione').value.trim();
       const importo = parseFloat(document.getElementById('importo').value);
       const dataVal = document.getElementById('data').value;
-      const entita = document.getElementById('entita').value;
+      const entita = document.getElementById('entita-search').value.trim();
       const tipo = document.getElementById('tipo').value;
       const categoria = document.getElementById('categoria').value;
       const tags = document.getElementById('tags').value.trim();
       const receipt_url = document.getElementById('receipt-url').value.trim();
 
       if (!descrizione || isNaN(importo) || !dataVal) return alert('Compila tutti i campi obbligatori');
+
+      // Se il nome digitato non è presente nell'anagrafica, lo inserisce automaticamente in 'entities'
+      if (entita !== "") {
+        const giaPresente = entitaList.some(e => e.name.toLowerCase() === entita.toLowerCase());
+        if (!giaPresente) {
+          const { data: newEntData } = await supabaseClient.from('entities').insert([{ name: entita, user_id: currentUser.id }]).select();
+          if (newEntData && newEntData.length > 0) {
+            entitaList.push(newEntData[0]);
+            renderMasterDataLists();
+            populateDropdowns();
+          }
+        }
+      }
 
       const nuovaTx = { 
         descrizione, 
@@ -641,9 +660,7 @@
       transazioni.unshift(data[0]);
       renderTransactions();
       updateDashboard();
-      document.getElementById('form-transaction').reset();
-      document.getElementById('data').valueAsDate = new Date();
-      populateDropdowns();
+      resetNewTransactionForm();
       alert('Movimento salvato con successo!');
     });
 
@@ -734,11 +751,11 @@
         entTotals[ent][t.tipo] += val;
       });
 
-      // --- 1. CASHFLOW TREND CHART (Andamento Mese su Mese) ---
+      // --- 1. CASHFLOW TREND CHART ---
       const monthsData = {};
       transazioni.forEach(t => {
         if (!t.data) return;
-        const monthKey = t.data.substring(0, 7); // 'YYYY-MM'
+        const monthKey = t.data.substring(0, 7);
         if (!monthsData[monthKey]) monthsData[monthKey] = { entrata: 0, uscita: 0 };
         const val = parseFloat(t.importo) || 0;
         monthsData[monthKey][t.tipo] += val;
@@ -760,7 +777,7 @@
         options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'bottom' } } }
       });
 
-      // --- 2. DONUT CHART CATEGORIE (CON DRILL-DOWN SU CLICK) ---
+      // --- 2. DONUT CHART CATEGORIE ---
       const catCtx = document.getElementById('chart-categories').getContext('2d');
       if (categoriesChartInstance) categoriesChartInstance.destroy();
 
@@ -782,7 +799,6 @@
             if (activeElements.length > 0) {
               const index = activeElements[0].index;
               const selectedCategory = catLabels[index];
-              // Drill-Down: Imposta filtro categoria nello storico e passa alla tab
               document.getElementById('filter-category').value = selectedCategory;
               switchTab('tab-storico');
               renderTransactions();
