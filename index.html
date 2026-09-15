@@ -807,21 +807,35 @@
         }
       });
 
-      // --- 3. BAR CHART CLIENTE / FORNITORE ---
+    // --- 3. BAR CHART CLIENTE / FORNITORE (SOLO USCITE ORDINATE DECRESCENTI) ---
       const entCtx = document.getElementById('chart-entities').getContext('2d');
       if (entitiesChartInstance) entitiesChartInstance.destroy();
 
-      const entLabels = Object.keys(entTotals);
+      // Ordinamento dal più grande al più piccolo
+      const sortedEntities = Object.entries(entUsciteTotals)
+        .sort((a, b) => b[1] - a[1]); // b[1] - a[1] ordina in modo decrescente
+
+      const entLabels = sortedEntities.map(item => item[0]);
+      const entValues = sortedEntities.map(item => item[1]);
+
       entitiesChartInstance = new Chart(entCtx, {
         type: 'bar',
         data: {
           labels: entLabels,
           datasets: [
-            { label: 'Entrate (€)', data: entLabels.map(l => entTotals[l].entrata), backgroundColor: '#34c759' },
-            { label: 'Uscite (€)', data: entLabels.map(l => entTotals[l].uscita), backgroundColor: '#ff3b30' }
+            { 
+              label: 'Uscite (€)', 
+              data: entValues, 
+              backgroundColor: '#ff3b30' 
+            }
           ]
         },
-        options: { responsive: true, maintainAspectRatio: false, scales: { y: { beginAtZero: true } }, plugins: { legend: { position: 'bottom' } } }
+        options: { 
+          responsive: true, 
+          maintainAspectRatio: false, 
+          scales: { y: { beginAtZero: true } }, 
+          plugins: { legend: { position: 'bottom' } } 
+        }
       });
     }
   </script>
