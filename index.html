@@ -50,6 +50,10 @@
     .input-inline-group select, .input-inline-group input { flex: 1; margin-bottom: 10px; }
     .input-inline-group button { width: auto; padding: 12px 16px; margin-bottom: 10px; font-size: 1.1rem; }
 
+    /* File Input / Photo Custom Style */
+    .file-input-wrapper { margin-bottom: 10px; }
+    .file-input-wrapper label { display: block; font-size: 0.85rem; font-weight: bold; margin-bottom: 4px; color: var(--text-muted); }
+
     /* Layout Auth */
     .auth-container { max-width: 400px; margin: 40px auto; }
     .auth-links { text-align: center; margin-top: 10px; }
@@ -83,9 +87,6 @@
     .item-list { list-style: none; padding: 0; margin: 0; }
     .item-list li { display: flex; justify-content: space-between; align-items: center; padding: 10px 0; border-bottom: 1px solid var(--border-light); }
     .item-list li:last-child { border-bottom: none; }
-
-    /* Tag Chips */
-    .tag-badge { background: #007aff22; color: #007aff; padding: 2px 6px; border-radius: 4px; font-size: 0.75rem; margin-right: 4px; }
 
     /* Contenitori Grafici */
     .chart-container { position: relative; width: 100%; max-height: 350px; margin-top: 12px; }
@@ -186,11 +187,14 @@
 
           <select id="categoria"></select>
 
-          <input type="text" id="tags" placeholder="Tag (es. #vacanza2026, #lavoro)">
-          <input type="url" id="receipt-url" placeholder="URL Scontrino / Ricevuta (Opzionale)">
+          <!-- Caricamento/Scatto Foto Scontrino -->
+          <div class="file-input-wrapper">
+            <label for="receipt-file">📷 Foto / Scatta Scontrino (Opzionale):</label>
+            <input type="file" id="receipt-file" accept="image/*" capture="environment">
+          </div>
 
           <div style="display: flex; gap: 8px;">
-            <button type="submit" style="flex: 2;">Salva Movimento</button>
+            <button type="submit" id="btn-submit-tx" style="flex: 2;">Salva Movimento</button>
             <button type="button" class="btn-secondary" onclick="resetNewTransactionForm()" style="flex: 1;">🧹 Svuota</button>
           </div>
         </form>
@@ -603,21 +607,52 @@
       document.getElementById('form-transaction').reset();
       document.getElementById('data').valueAsDate = new Date();
       document.getElementById('entita-search').value = '';
+      document.getElementById('receipt-file').value = '';
       populateDropdowns();
+    }
+
+    // CARICAMENTO FOTO SU SUPABASE STORAGE
+    async function uploadReceiptPhoto(file) {
+      const fileExt = file.name.split('.').pop();
+      const fileName = `${currentUser.id}/${Date.now()}.${fileExt}`;
+      const filePath = `receipts/${fileName}`;
+
+      const { data, error } = await supabaseClient.storage
+        .from('receipts')
+        .upload(filePath, file);
+
+      if (error) {
+        console.error("Errore upload immagine:", error);
+        return null;
+      }
+
+      const { data: publicUrlData } = supabaseClient.storage
+        .from('receipts')
+        .getPublicUrl(filePath);
+
+      return publicUrlData ? publicUrlData.publicUrl : null;
     }
 
     document.getElementById('form-transaction').addEventListener('submit', async (e) => {
       e.preventDefault();
+      const btnSubmit = document.getElementById('btn-submit-tx');
       const descrizione = document.getElementById('descrizione').value.trim();
       const importo = parseFloat(document.getElementById('importo').value);
       const dataVal = document.getElementById('data').value;
       const entita = document.getElementById('entita-search').value.trim();
       const tipo = document.getElementById('tipo').value;
       const categoria = document.getElementById('categoria').value;
-      const tags = document.getElementById('tags').value.trim();
-      const receipt_url = document.getElementById('receipt-url').value.trim();
+      const fileInput = document.getElementById('receipt-file');
 
       if (!descrizione || isNaN(importo) || !dataVal) return alert('Compila tutti i campi obbligatori');
+
+      btnSubmit.disabled = true;
+      btnSubmit.innerText = "Salvataggio in corso...";
+
+      let receipt_url = null;
+      if (fileInput.files && fileInput.files[0]) {
+        receipt_url = await uploadReceiptPhoto(fileInput.files[0]);
+      }
 
       if (entita !== "") {
         const giaPresente = entitaList.some(e => e.name.toLowerCase() === entita.toLowerCase());
@@ -638,12 +673,14 @@
         data: dataVal, 
         tipo, 
         categoria, 
-        tags: tags || null,
         receipt_url: receipt_url || null,
         user_id: currentUser.id 
       };
 
       const { data, error } = await supabaseClient.from('transactions').insert([nuovaTx]).select();
+
+      btnSubmit.disabled = false;
+      btnSubmit.innerText = "Salva Movimento";
 
       if (error) return alert('Errore salvataggio: ' + error.message);
 
@@ -661,7 +698,7 @@
       const endDate = document.getElementById('filter-end-date').value;
 
       const filtered = transazioni.filter(t => {
-        const matchTxt = (t.descrizione || '').toLowerCase().includes(searchTxt) || (t.entita || '').toLowerCase().includes(searchTxt) || (t.tags || '').toLowerCase().includes(searchTxt);
+        const matchTxt = (t.descrizione || '').toLowerCase().includes(searchTxt) || (t.entita || '').toLowerCase().includes(searchTxt);
         const matchCat = !catFilter || t.categoria === catFilter;
         const matchStart = !startDate || t.data >= startDate;
         const matchEnd = !endDate || t.data <= endDate;
@@ -671,14 +708,12 @@
       document.getElementById('list-transactions').innerHTML = filtered.length === 0 
         ? '<li><small style="color:var(--text-muted);">Nessuna transazione trovata</small></li>'
         : filtered.map(t => {
-          const tagsArray = t.tags ? t.tags.split(',').map(tag => tag.trim()) : [];
           return `
             <li>
               <div>
                 <strong>${t.descrizione}</strong> <small style="color:var(--text-muted);">(${t.categoria || 'Generale'})</small><br>
                 <small style="color:var(--text-muted);">${t.data} ${t.entita ? '| ' + t.entita : ''}</small>
-                ${tagsArray.length > 0 ? `<div style="margin-top:2px;">${tagsArray.map(tg => `<span class="tag-badge">${tg}</span>`).join('')}</div>` : ''}
-                ${t.receipt_url ? `<div style="margin-top:2px;"><a href="${t.receipt_url}" target="_blank" style="font-size:0.75rem; color:#007aff;">📎 Vedi Scontrino</a></div>` : ''}
+                ${t.receipt_url ? `<div style="margin-top:2px;"><a href="${t.receipt_url}" target="_blank" style="font-size:0.75rem; color:#007aff;">📎 Vedi Foto Scontrino</a></div>` : ''}
               </div>
               <div style="font-weight:bold; color: ${t.tipo === 'entrata' ? '#34c759' : '#ff3b30'};">
                 ${t.tipo === 'entrata' ? '+' : '-'}€${parseFloat(t.importo).toFixed(2)}
