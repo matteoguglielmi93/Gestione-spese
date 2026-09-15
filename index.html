@@ -271,7 +271,7 @@
 
       <!-- GRAFICO BARRE CLIENTE / FORNITORE -->
       <div class="card">
-        <h3>📊 Totali per Cliente / Fornitore</h3>
+        <h3>📊 Totali per Cliente / Fornitore (Solo Uscite)</h3>
         <div class="chart-container">
           <canvas id="chart-entities"></canvas>
         </div>
@@ -304,7 +304,7 @@
   <!-- ================= SCRIPT JAVASCRIPT ================= -->
   <script>
     const SUPABASE_URL = 'https://owqspxfgueqzivrwvupp.supabase.co'; // Sostituisci con il tuo URL
-    const SUPABASE_ANON_KEY = 'sb_publishable_HEp-x3FM0m_Ym8h7O1etFw_0ZojwUk7'; // Sostituisci con la tua chiave 
+    const SUPABASE_ANON_KEY = 'sb_publishable_HEp-x3FM0m_Ym8h7O1etFw_0ZojwUk7'; // Sostituisci con la tua chiave  
 
     const supabaseProvider = window.supabase || supabase;
     const supabaseClient = supabaseProvider.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
@@ -486,8 +486,8 @@
         if (txData && txData.length > 0) {
           const nomiUnici = [...new Set(txData.map(t => t.entita ? t.entita.trim() : '').filter(nome => nome !== ''))];
           if (nomiUnici.length > 0) {
-            const meEntita = nomiUnici.map(nome => ({ name: nome, user_id: currentUser.id }));
-            const { data: insertedData } = await supabaseClient.from('entities').insert(meEntita).select();
+            const nuoveEntita = nomiUnici.map(nome => ({ name: nome, user_id: currentUser.id }));
+            const { data: insertedData } = await supabaseClient.from('entities').insert(nuoveEntita).select();
             if (insertedData) entData = insertedData;
           }
         }
@@ -528,14 +528,12 @@
         filterCatSelect.innerHTML = `<option value="">Tutte le categorie</option>` + categorie.map(c => `<option value="${c.name}">${c.name}</option>`).join('');
       }
 
-      // Popola il datalist per la ricerca di Clienti / Fornitori
       const entDatalist = document.getElementById('entita-datalist');
       if (entDatalist) {
         entDatalist.innerHTML = entitaList.map(e => `<option value="${e.name}"></option>`).join('');
       }
     }
 
-    // SALVATAGGIO RAPIDO DI UN NUOVO CLIENTE / FORNITORE DAL CAMPO DI RICERCA
     async function quickSaveNewEntity() {
       const inputEl = document.getElementById('entita-search');
       const nomeClean = inputEl.value.trim();
@@ -628,7 +626,6 @@
 
       if (!descrizione || isNaN(importo) || !dataVal) return alert('Compila tutti i campi obbligatori');
 
-      // Se il nome digitato non è presente nell'anagrafica, lo inserisce automaticamente in 'entities'
       if (entita !== "") {
         const giaPresente = entitaList.some(e => e.name.toLowerCase() === entita.toLowerCase());
         if (!giaPresente) {
@@ -738,17 +735,17 @@
       });
 
       const catTotals = {};
-      const entTotals = {};
+      const entUsciteTotals = {};
 
       transazioniFiltrate.forEach(t => {
         const val = parseFloat(t.importo) || 0;
         const cat = t.categoria || 'Senza Categoria';
         const ent = t.entita || 'Nessuno';
 
-        if (t.tipo === 'uscita') catTotals[cat] = (catTotals[cat] || 0) + val;
-
-        if (!entTotals[ent]) entTotals[ent] = { entrata: 0, uscita: 0 };
-        entTotals[ent][t.tipo] += val;
+        if (t.tipo === 'uscita') {
+          catTotals[cat] = (catTotals[cat] || 0) + val;
+          entUsciteTotals[ent] = (entUsciteTotals[ent] || 0) + val;
+        }
       });
 
       // --- 1. CASHFLOW TREND CHART ---
@@ -807,14 +804,11 @@
         }
       });
 
-    // --- 3. BAR CHART CLIENTE / FORNITORE (SOLO USCITE ORDINATE DECRESCENTI) ---
+      // --- 3. BAR CHART CLIENTE / FORNITORE (SOLO USCITE ORDINATE DECRESCENTI) ---
       const entCtx = document.getElementById('chart-entities').getContext('2d');
       if (entitiesChartInstance) entitiesChartInstance.destroy();
 
-      // Ordinamento dal più grande al più piccolo
-      const sortedEntities = Object.entries(entUsciteTotals)
-        .sort((a, b) => b[1] - a[1]); // b[1] - a[1] ordina in modo decrescente
-
+      const sortedEntities = Object.entries(entUsciteTotals).sort((a, b) => b[1] - a[1]);
       const entLabels = sortedEntities.map(item => item[0]);
       const entValues = sortedEntities.map(item => item[1]);
 
