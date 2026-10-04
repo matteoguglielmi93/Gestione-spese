@@ -275,6 +275,25 @@
         <ul id="list-report-entities" class="item-list"></ul>
       </div>
     </div>
+	
+	<div class="card" style="margin-top: 1rem;">
+		<h3>Riepilogo Mensile (Spese, Entrate, Saldo)</h3>
+		<div style="overflow-x: auto;">
+		<table style="width: 100%; border-collapse: collapse; margin-top: 0.5rem;">
+			<thead>
+				<tr style="border-bottom: 1px solid var(--border-color, #ccc); text-align: left;">
+					<th style="padding: 8px;">Anno/Mese</th>
+					<th style="padding: 8px; text-align: right;">Spese</th>
+					<th style="padding: 8px; text-align: right;">Entrate</th>
+					<th style="padding: 8px; text-align: right;">Saldo</th>
+				</tr>
+			</thead>
+			<tbody id="table-monthly-summary">
+				<!-- Generato dinamicamente da renderReports() -->
+			</tbody>
+		</table>
+		</div>
+	</div>
 
     <!-- TAB 4: GESTIONE CATEGORIE & ENTITÀ -->
     <div id="tab-gestione" class="tab-content hidden">
@@ -303,7 +322,6 @@
   <script>
     const SUPABASE_URL = 'https://owqspxfgueqzivrwvupp.supabase.co'; // Sostituisci con il tuo URL
     const SUPABASE_ANON_KEY = 'sb_publishable_HEp-x3FM0m_Ym8h7O1etFw_0ZojwUk7'; // Sostituisci con la tua chiave 
-
     const supabaseProvider = window.supabase || supabase;
     const supabaseClient = supabaseProvider.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
@@ -328,6 +346,29 @@
     // Istanze Grafici
     let cashflowChartInstance = null;
     let categoriesChartInstance = null;
+
+    // Helper: Sanitizzazione stringhe contro attacchi XSS
+    function escapeHTML(str) {
+      return String(str || '').replace(/[&<>"']/g, function (m) {
+        return {
+          '&': '&amp;',
+          '<': '&lt;',
+          '>': '&gt;',
+          '"': '&quot;',
+          "'": '&#039;'
+        }[m];
+      });
+    }
+
+    // Helper: Generazione dinamica colori HSL per i grafici
+    function generatePalette(count) {
+      const colors = [];
+      for (let i = 0; i < count; i++) {
+        const hue = (i * 360) / (count || 1);
+        colors.push(`hsl(${hue}, 65%, 55%)`);
+      }
+      return colors;
+    }
 
     // Gestione Tema Scuro / Chiaro
     function initTheme() {
@@ -498,7 +539,7 @@
     function renderMasterDataLists() {
       document.getElementById('list-categories').innerHTML = categorie.map(c => `
         <li>
-          <span><strong>${c.name}</strong> <small>(${c.type})</small></span>
+          <span><strong>${escapeHTML(c.name)}</strong> <small>(${escapeHTML(c.type)})</small></span>
           ${String(c.id).startsWith('def-') ? '<small style="color:var(--text-muted);">(Predefinita)</small>' : `<button onclick="deleteCategory(${c.id})" class="btn-danger" style="width:auto; padding: 4px 8px;">❌</button>`}
         </li>
       `).join('');
@@ -509,7 +550,7 @@
           ? '<li><small style="color:var(--text-muted);">Nessun cliente/fornitore salvato</small></li>'
           : entitaList.map(e => `
             <li>
-              <span><strong>${e.name}</strong></span>
+              <span><strong>${escapeHTML(e.name)}</strong></span>
               ${e.id ? `<button onclick="deleteEntity(${e.id})" class="btn-danger" style="width:auto; padding: 4px 8px;">❌</button>` : ''}
             </li>
           `).join('');
@@ -518,16 +559,16 @@
 
     function populateDropdowns() {
       const catSelect = document.getElementById('categoria');
-      if (catSelect) catSelect.innerHTML = categorie.map(c => `<option value="${c.name}">${c.name} (${c.type})</option>`).join('');
+      if (catSelect) catSelect.innerHTML = categorie.map(c => `<option value="${escapeHTML(c.name)}">${escapeHTML(c.name)} (${escapeHTML(c.type)})</option>`).join('');
 
       const filterCatSelect = document.getElementById('filter-category');
       if (filterCatSelect) {
-        filterCatSelect.innerHTML = `<option value="">Tutte le categorie</option>` + categorie.map(c => `<option value="${c.name}">${c.name}</option>`).join('');
+        filterCatSelect.innerHTML = `<option value="">Tutte le categorie</option>` + categorie.map(c => `<option value="${escapeHTML(c.name)}">${escapeHTML(c.name)}</option>`).join('');
       }
 
       const entDatalist = document.getElementById('entita-datalist');
       if (entDatalist) {
-        entDatalist.innerHTML = entitaList.map(e => `<option value="${e.name}"></option>`).join('');
+        entDatalist.innerHTML = entitaList.map(e => `<option value="${escapeHTML(e.name)}"></option>`).join('');
       }
     }
 
@@ -611,7 +652,6 @@
       populateDropdowns();
     }
 
-    // CARICAMENTO FOTO SU SUPABASE STORAGE
     async function uploadReceiptPhoto(file) {
       const fileExt = file.name.split('.').pop();
       const fileName = `${currentUser.id}/${Date.now()}.${fileExt}`;
@@ -711,9 +751,9 @@
           return `
             <li>
               <div>
-                <strong>${t.descrizione}</strong> <small style="color:var(--text-muted);">(${t.categoria || 'Generale'})</small><br>
-                <small style="color:var(--text-muted);">${t.data} ${t.entita ? '| ' + t.entita : ''}</small>
-                ${t.receipt_url ? `<div style="margin-top:2px;"><a href="${t.receipt_url}" target="_blank" style="font-size:0.75rem; color:#007aff;">📎 Vedi Foto Scontrino</a></div>` : ''}
+                <strong>${escapeHTML(t.descrizione)}</strong> <small style="color:var(--text-muted);">(${escapeHTML(t.categoria) || 'Generale'})</small><br>
+                <small style="color:var(--text-muted);">${t.data} ${t.entita ? '| ' + escapeHTML(t.entita) : ''}</small>
+                ${t.receipt_url ? `<div style="margin-top:2px;"><a href="${escapeHTML(t.receipt_url)}" target="_blank" style="font-size:0.75rem; color:#007aff;">📎 Vedi Foto Scontrino</a></div>` : ''}
               </div>
               <div style="font-weight:bold; color: ${t.tipo === 'entrata' ? '#34c759' : '#ff3b30'};">
                 ${t.tipo === 'entrata' ? '+' : '-'}€${parseFloat(t.importo).toFixed(2)}
@@ -753,9 +793,10 @@
 
       const transazioniFiltrate = transazioni.filter(t => {
         if (!t.data) return false;
-        const d = new Date(t.data);
-        const txMonth = d.getMonth() + 1;
-        const txYear = d.getFullYear();
+        // Split della data per evitare problemi di fuso orario UTC
+        const [txYearStr, txMonthStr] = t.data.split('-');
+        const txYear = parseInt(txYearStr, 10);
+        const txMonth = parseInt(txMonthStr, 10);
 
         if (preset === 'current_month' || preset === 'custom') return txMonth === selectedMonth && txYear === selectedYear;
         if (preset === 'current_year') return txYear === selectedYear;
@@ -776,11 +817,11 @@
         }
       });
 
-      // --- 1. CASHFLOW TREND CHART ---
+      // --- 1. CASHFLOW TREND CHART & DATI PER TABELLA MESI ---
       const monthsData = {};
       transazioni.forEach(t => {
         if (!t.data) return;
-        const monthKey = t.data.substring(0, 7);
+        const monthKey = t.data.substring(0, 7); // 'YYYY-MM'
         if (!monthsData[monthKey]) monthsData[monthKey] = { entrata: 0, uscita: 0 };
         const val = parseFloat(t.importo) || 0;
         monthsData[monthKey][t.tipo] += val;
@@ -802,7 +843,7 @@
         options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'bottom' } } }
       });
 
-      // --- 2. DONUT CHART CATEGORIE ---
+      // --- 2. DONUT CHART CATEGORIE (CON PALETTE DINAMICA) ---
       const catCtx = document.getElementById('chart-categories').getContext('2d');
       if (categoriesChartInstance) categoriesChartInstance.destroy();
 
@@ -813,7 +854,7 @@
           labels: catLabels,
           datasets: [{
             data: Object.values(catTotals),
-            backgroundColor: ['#FF6384', '#36A2EB', '#FFCE56', '#4BC0C0', '#9966FF', '#FF9F40', '#E7E9ED', '#8AC926']
+            backgroundColor: generatePalette(catLabels.length)
           }]
         },
         options: {
@@ -832,7 +873,34 @@
         }
       });
 
-      // --- 3. LISTA TESTUALE CLIENTE / FORNITORE (SOLO USCITE ORDINATE DECRESCENTI) ---
+      // --- 3. TABELLA RIEPILOGATIVA PER ANNO/MESE (Spese, Entrate, Saldo) ---
+      const tableMonthlyEl = document.getElementById('table-monthly-summary');
+      if (tableMonthlyEl) {
+        if (sortedMonths.length === 0) {
+          tableMonthlyEl.innerHTML = '<tr><td colspan="4" style="text-align:center; color:var(--text-muted);">Nessun dato presente</td></tr>';
+        } else {
+          // Ordiniamo i mesi dal più recente al più vecchio per la tabella
+          const reversedMonths = [...sortedMonths].reverse();
+          tableMonthlyEl.innerHTML = reversedMonths.map(monthKey => {
+            const entrate = monthsData[monthKey].entrata;
+            const uscite = monthsData[monthKey].uscita;
+            const saldo = entrate - uscite;
+
+            return `
+              <tr>
+                <td><strong>${monthKey}</strong></td>
+                <td style="color: #ff3b30; text-align: right;">-€${uscite.toFixed(2)}</td>
+                <td style="color: #34c759; text-align: right;">+€${entrate.toFixed(2)}</td>
+                <td style="font-weight: bold; text-align: right; color: ${saldo >= 0 ? '#34c759' : '#ff3b30'};">
+                  €${saldo.toFixed(2)}
+                </td>
+              </tr>
+            `;
+          }).join('');
+        }
+      }
+
+      // --- 4. LISTA TESTUALE CLIENTE / FORNITORE (SOLO USCITE ORDINATE DECRESCENTI) ---
       const sortedEntities = Object.entries(entUsciteTotals).sort((a, b) => b[1] - a[1]);
       const reportEntitiesListEl = document.getElementById('list-report-entities');
 
@@ -842,13 +910,13 @@
         } else {
           reportEntitiesListEl.innerHTML = sortedEntities.map(([nome, importo]) => `
             <li>
-              <span><strong>${nome}</strong></span>
+              <span><strong>${escapeHTML(nome)}</strong></span>
               <span style="font-weight: bold; color: #ff3b30;">-€${importo.toFixed(2)}</span>
             </li>
           `).join('');
         }
       }
     }
-  </script>
+</script>
 </body>
 </html>
