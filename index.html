@@ -95,6 +95,26 @@
     /* Layout Filtri Report e Storico */
     .filter-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 8px; margin-bottom: 8px; }
     .filter-grid input, .filter-grid select { margin-bottom: 0; }
+
+    /* Modal Overlay Styles */
+    .modal-overlay {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(0, 0, 0, 0.5);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 1000;
+      padding: 16px;
+    }
+    .modal-content {
+      width: 100%;
+      max-width: 420px;
+      margin: 0;
+    }
   </style>
 </head>
 <body>
@@ -320,10 +340,34 @@
 
   </div>
 
+  <!-- MODAL EDIT TRANSAZIONE -->
+  <div id="modal-edit-tx" class="modal-overlay hidden">
+    <div class="card modal-content">
+      <h3 style="margin-bottom: 12px;">✏️ Modifica Transazione</h3>
+      <input type="text" id="edit-tx-desc" placeholder="Descrizione" required>
+      <input type="number" step="0.01" id="edit-tx-importo" placeholder="Importo (€)" required>
+      <input type="date" id="edit-tx-data" required>
+      
+      <input type="text" id="edit-tx-entita" list="entita-datalist" placeholder="Cliente/Fornitore..." autocomplete="off">
+
+      <select id="edit-tx-tipo">
+        <option value="uscita">Uscita</option>
+        <option value="entrata">Entrata</option>
+      </select>
+
+      <select id="edit-tx-categoria"></select>
+
+      <div style="display: flex; gap: 8px; margin-top: 8px;">
+        <button onclick="saveEditedTransaction()" style="flex: 2;">💾 Salva Modifiche</button>
+        <button onclick="closeEditModal()" class="btn-secondary" style="flex: 1;">Annulla</button>
+      </div>
+    </div>
+  </div>
+
   <!-- ================= SCRIPT JAVASCRIPT ================= -->
   <script>
     const SUPABASE_URL = 'https://owqspxfgueqzivrwvupp.supabase.co'; // Sostituisci con il tuo URL
-    const SUPABASE_ANON_KEY = 'sb_publishable_HEp-x3FM0m_Ym8h7O1etFw_0ZojwUk7'; // Sostituisci con la tua chiave  
+    const SUPABASE_ANON_KEY = 'sb_publishable_HEp-x3FM0m_Ym8h7O1etFw_0ZojwUk7'; // Sostituisci con la tua chiave 
 
     const supabaseProvider = window.supabase || supabase;
     const supabaseClient = supabaseProvider.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
@@ -345,6 +389,7 @@
     let categorie = [...defaultCategories];
     let entitaList = [];
     let isSummaryVisible = false;
+    let editingTxId = null;
 
     // Istanze Grafici
     let cashflowChartInstance = null;
@@ -591,7 +636,12 @@
 
     function populateDropdowns() {
       const catSelect = document.getElementById('categoria');
-      if (catSelect) catSelect.innerHTML = categorie.map(c => `<option value="${escapeHTML(c.name)}">${escapeHTML(c.name)} (${escapeHTML(c.type)})</option>`).join('');
+      const editCatSelect = document.getElementById('edit-tx-categoria');
+      
+      const optionsHTML = categorie.map(c => `<option value="${escapeHTML(c.name)}">${escapeHTML(c.name)} (${escapeHTML(c.type)})</option>`).join('');
+
+      if (catSelect) catSelect.innerHTML = optionsHTML;
+      if (editCatSelect) editCatSelect.innerHTML = optionsHTML;
 
       const filterCatSelect = document.getElementById('filter-category');
       if (filterCatSelect) {
@@ -863,12 +913,117 @@
                 <small style="color:var(--text-muted);">${escapeHTML(t.data)} ${t.entita ? '| ' + escapeHTML(t.entita) : ''}</small>
                 ${t.receipt_url ? `<div style="margin-top:2px;"><a href="${escapeHTML(t.receipt_url)}" target="_blank" style="font-size:0.75rem; color:#007aff;">📎 Vedi Foto Scontrino</a></div>` : ''}
               </div>
-              <div style="font-weight:bold; color: ${t.tipo === 'entrata' ? '#34c759' : '#ff3b30'};">
-                ${t.tipo === 'entrata' ? '+' : '-'}€${parseFloat(t.importo).toFixed(2)}
+              <div style="display:flex; align-items:center; gap:8px;">
+                <div style="font-weight:bold; color: ${t.tipo === 'entrata' ? '#34c759' : '#ff3b30'}; text-align:right;">
+                  ${t.tipo === 'entrata' ? '+' : '-'}€${parseFloat(t.importo).toFixed(2)}
+                </div>
+                <div class="item-actions">
+                  <button onclick="openEditModal('${t.id}')" class="btn-secondary" style="width:auto; padding: 4px 8px; margin-bottom: 0;" title="Modifica">✏️</button>
+                  <button onclick="deleteTransaction('${t.id}')" class="btn-danger" style="width:auto; padding: 4px 8px; margin-bottom: 0;" title="Elimina">❌</button>
+                </div>
               </div>
             </li>
           `;
         }).join('');
+    }
+
+    // GESTIONE MODIFICA & ELIMINAZIONE TRANSAZIONI NELLO STORICO
+    function openEditModal(id) {
+      const tx = transazioni.find(t => String(t.id) === String(id));
+      if (!tx) return;
+
+      editingTxId = id;
+      document.getElementById('edit-tx-desc').value = tx.descrizione || '';
+      document.getElementById('edit-tx-importo').value = tx.importo || '';
+      document.getElementById('edit-tx-data').value = tx.data || '';
+      document.getElementById('edit-tx-entita').value = tx.entita || '';
+      document.getElementById('edit-tx-tipo').value = tx.tipo || 'uscita';
+      
+      populateDropdowns();
+      if (tx.categoria) {
+        document.getElementById('edit-tx-categoria').value = tx.categoria;
+      }
+
+      document.getElementById('modal-edit-tx').classList.remove('hidden');
+    }
+
+    function closeEditModal() {
+      editingTxId = null;
+      document.getElementById('modal-edit-tx').classList.add('hidden');
+    }
+
+    async function saveEditedTransaction() {
+      if (!editingTxId) return;
+
+      const descrizione = document.getElementById('edit-tx-desc').value.trim();
+      const importo = parseFloat(document.getElementById('edit-tx-importo').value);
+      const dataVal = document.getElementById('edit-tx-data').value;
+      const entita = document.getElementById('edit-tx-entita').value.trim();
+      const tipo = document.getElementById('edit-tx-tipo').value;
+      const categoria = document.getElementById('edit-tx-categoria').value;
+
+      if (!descrizione || isNaN(importo) || !dataVal) {
+        alert("Compila tutti i campi obbligatori");
+        return;
+      }
+
+      if (entita !== "") {
+        const giaPresente = entitaList.some(e => e.name.toLowerCase() === entita.toLowerCase());
+        if (!giaPresente) {
+          const { data: newEntData } = await supabaseClient.from('entities').insert([{ name: entita, user_id: currentUser.id }]).select();
+          if (newEntData && newEntData.length > 0) {
+            entitaList.push(newEntData[0]);
+            renderMasterDataLists();
+            populateDropdowns();
+          }
+        }
+      }
+
+      const updatePayload = {
+        descrizione,
+        importo,
+        data: dataVal,
+        entita: entita || null,
+        tipo,
+        categoria
+      };
+
+      const { error } = await supabaseClient.from('transactions')
+        .update(updatePayload)
+        .eq('id', editingTxId);
+
+      if (error) {
+        alert("Errore durante l'aggiornamento: " + error.message);
+        return;
+      }
+
+      const txIndex = transazioni.findIndex(t => String(t.id) === String(editingTxId));
+      if (txIndex !== -1) {
+        transazioni[txIndex] = { ...transazioni[txIndex], ...updatePayload };
+      }
+
+      transazioni.sort((a, b) => new Date(b.data) - new Date(a.data));
+
+      closeEditModal();
+      renderTransactions();
+      updateDashboard();
+      renderReports();
+      alert("Transazione aggiornata con successo!");
+    }
+
+    async function deleteTransaction(id) {
+      if (!confirm("Sei sicuro di voler eliminare questa transazione dallo storico?")) return;
+
+      const { error } = await supabaseClient.from('transactions').delete().eq('id', id);
+      if (error) {
+        alert("Errore durante l'eliminazione: " + error.message);
+        return;
+      }
+
+      transazioni = transazioni.filter(t => String(t.id) !== String(id));
+      renderTransactions();
+      updateDashboard();
+      renderReports();
     }
 
     function resetHistoryFilters() {
